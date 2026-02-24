@@ -487,6 +487,7 @@ var myPeerId = null;
 // Host: all client connections & their states
 var clients = {};       // peerId -> { conn, colorIndex, state }
 var nextColorIndex = 1; // 0 = host (red)
+var localMoving = false; // tracked for host broadcast
 
 // Client: single connection to host
 var hostConn = null;
@@ -525,7 +526,7 @@ function hostBroadcast(time) {
   if (!isHost) return;
   var allStates = {};
   // Host's own state
-  allStates[myPeerId] = { x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: false, c: 0 };
+  allStates[myPeerId] = { x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: localMoving, c: 0 };
   // All clients' states
   for (var pid in clients) {
     if (clients[pid].state) {
@@ -544,8 +545,10 @@ function hostBroadcast(time) {
 // === HOST: handle new client connection ===
 function hostOnConnection(c) {
   var colorIdx = nextColorIndex++;
-  clients[c.peer] = { conn: c, colorIndex: colorIdx, state: { x: 6, z: 6, ry: 0, m: false, c: colorIdx } };
+  var sharedState = { x: 6, z: 6, ry: 0, m: false, c: colorIdx };
+  clients[c.peer] = { conn: c, colorIndex: colorIdx, state: sharedState };
   getOrCreateRemote(c.peer, colorIdx);
+  remotePlayers[c.peer].state = sharedState; // same object for network + rendering
 
   c.on('open', function() {
     c.send({ t: 'welcome', c: colorIdx, id: c.peer });
@@ -576,9 +579,13 @@ function hostOnConnection(c) {
 // === CLIENT: handle data from host ===
 function clientOnData(data) {
   if (data.t === 'welcome') {
-    // Could update local color, but host is always red, clients get assigned colors
     isConnected = true;
     hideLobby();
+    // Update local player to assigned color
+    var myColor = PLAYER_COLORS[data.c % PLAYER_COLORS.length];
+    local.parts[0].material.color.setHex(myColor); // body
+    local.parts[3].material.color.setHex(myColor); // hat
+    local.parts[4].material.color.setHex(myColor); // brim
     updateBadge();
   } else if (data.t === 'state') {
     var playerStates = data.p;
@@ -680,6 +687,7 @@ function animate() {
   if (keys['ArrowDown'] || keys['KeyS']) dz = 1;
 
   var moving = dx !== 0 || dz !== 0;
+  localMoving = moving;
   if (moving) {
     var len = Math.sqrt(dx * dx + dz * dz);
     dx /= len; dz /= len;
