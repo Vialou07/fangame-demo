@@ -60,11 +60,17 @@
   .solo-link:hover { color: rgba(255,255,255,0.55); }
   #connBadge {
     position: fixed; top: 16px; right: 16px; z-index: 50;
-    padding: 6px 14px; border-radius: 20px; font-size: 12px;
-    background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.6);
-    backdrop-filter: blur(4px); pointer-events: none; display: none;
+    padding: 8px 16px; border-radius: 12px; font-size: 13px;
+    background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.6);
+    backdrop-filter: blur(4px); display: none;
+    text-align: center; user-select: all; cursor: default;
   }
   #connBadge.on { display: block; background: rgba(50,180,80,0.25); color: #6FE080; border: 1px solid rgba(50,180,80,0.3); }
+  #connBadge .room-code {
+    font-family: monospace; font-size: 20px; font-weight: 700;
+    letter-spacing: 4px; color: #fff; display: block; margin-bottom: 2px;
+  }
+  #connBadge .room-label { font-size: 11px; opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -499,14 +505,16 @@ function hideLobby() {
   lobbyEl.classList.add('hidden');
 }
 
+var roomCode = '';
 function updateBadge() {
   var count = Object.keys(remotePlayers).length;
-  if (count > 0) {
-    badge.textContent = (count + 1) + ' joueurs';
+  if (roomCode) {
+    var label = count > 0 ? (count + 1) + ' joueurs' : 'En attente';
+    badge.innerHTML = '<span class="room-code">' + roomCode + '</span><span class="room-label">' + label + '</span>';
     badge.className = 'on';
     badge.style.display = 'block';
-  } else if (isConnected) {
-    badge.textContent = 'En attente';
+  } else if (count > 0) {
+    badge.innerHTML = '<span class="room-label">' + (count + 1) + ' joueurs</span>';
     badge.className = 'on';
     badge.style.display = 'block';
   }
@@ -596,16 +604,14 @@ document.getElementById('btnCreate').onclick = function() {
 
   showStatus('Connexion au serveur...', false);
   isHost = true;
+  roomCode = code;
 
   peer = new window.Peer('fangame-' + code, { debug: 0 });
   peer.on('open', function(id) {
     myPeerId = id;
-    document.getElementById('roomCode').textContent = code;
-    document.getElementById('roomInfo').style.display = '';
-    document.getElementById('waitText').textContent = 'En attente de joueurs...';
-    showStatus('', false);
     hideLobby();
-    updateBadge();
+    badge.className = 'on';
+    badge.style.display = 'block';
   });
   peer.on('connection', hostOnConnection);
   peer.on('error', function(err) { showStatus('Erreur: ' + err.type, true); });
