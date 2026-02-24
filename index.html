@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Visual Demo - Top-Down Multijoueur</title>
+<title>Pokemon World - Multijoueur</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; overflow: hidden; font-family: system-ui; }
@@ -26,89 +26,121 @@
     text-align: center; color: #fff; min-width: 320px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }
-  #lobby-box h2 { font-size: 20px; margin-bottom: 24px; font-weight: 500; color: #8BC4FF; }
-  #lobby-box button {
-    display: block; width: 100%; padding: 12px; margin: 8px 0;
+  #lobby-box h2 { font-size: 20px; margin-bottom: 20px; font-weight: 500; color: #8BC4FF; }
+  #auth-tabs {
+    display: flex; gap: 4px; margin-bottom: 16px;
+    background: rgba(255,255,255,0.06); border-radius: 8px; padding: 3px;
+  }
+  .tab {
+    flex: 1; padding: 8px; border: none; border-radius: 6px;
+    font-size: 13px; cursor: pointer; font-family: inherit;
+    background: transparent; color: rgba(255,255,255,0.5);
+    transition: all 0.2s;
+  }
+  .tab.active { background: rgba(74,158,255,0.25); color: #fff; }
+  .tab:hover:not(.active) { color: rgba(255,255,255,0.8); }
+  #lobby-box input {
+    width: 100%; padding: 10px 14px; margin: 5px 0;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+    font-size: 14px;
+    background: rgba(255,255,255,0.06); color: #fff;
+    font-family: inherit; outline: none;
+    transition: border-color 0.2s;
+  }
+  #lobby-box input::placeholder { color: rgba(255,255,255,0.25); }
+  #lobby-box input:focus { border-color: #4A9EFF; }
+  .action-btn {
+    display: block; width: 100%; padding: 11px; margin: 12px 0 4px;
     border: none; border-radius: 8px; font-size: 15px;
     cursor: pointer; font-family: inherit;
+    background: #4A9EFF; color: #fff;
     transition: transform 0.1s, background 0.2s;
   }
-  #lobby-box button:active { transform: scale(0.97); }
-  #btnCreate { background: #4A9EFF; color: #fff; }
-  #btnCreate:hover { background: #3A8EEF; }
-  #btnJoin { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.2) !important; }
-  #btnJoin:hover { background: rgba(255,255,255,0.18); }
-  #lobby-box input {
-    width: 100%; padding: 10px 14px; margin: 8px 0;
-    border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
-    font-size: 18px; text-align: center; text-transform: uppercase;
-    background: rgba(255,255,255,0.08); color: #fff;
-    font-family: monospace; letter-spacing: 6px; outline: none;
-  }
-  #lobby-box input::placeholder { color: rgba(255,255,255,0.25); letter-spacing: 2px; font-size: 14px; }
-  #lobby-box input:focus { border-color: #4A9EFF; }
-  .lobby-divider { margin: 20px 0; border: none; border-top: 1px solid rgba(255,255,255,0.08); }
-  #roomInfo {
-    margin: 12px 0; padding: 16px;
-    background: rgba(74, 158, 255, 0.1);
-    border-radius: 8px; border: 1px solid rgba(74, 158, 255, 0.2);
-  }
-  #roomCode { font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #4A9EFF; }
-  .waiting { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 8px; }
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn:hover { background: #3A8EEF; }
+  .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   #status { margin-top: 8px; font-size: 13px; color: #F06878; min-height: 18px; }
-  .solo-link { margin-top: 16px; font-size: 12px; color: rgba(255,255,255,0.3); cursor: pointer; }
+  .solo-link { margin-top: 14px; font-size: 12px; color: rgba(255,255,255,0.3); cursor: pointer; }
   .solo-link:hover { color: rgba(255,255,255,0.55); }
   #connBadge {
     position: fixed; top: 16px; right: 16px; z-index: 50;
-    padding: 8px 16px; border-radius: 12px; font-size: 13px;
+    padding: 10px 18px; border-radius: 12px; font-size: 13px;
     background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.6);
     backdrop-filter: blur(4px); display: none;
-    text-align: center; user-select: all; cursor: default;
+    text-align: center; cursor: default;
   }
-  #connBadge.on { display: block; background: rgba(50,180,80,0.25); color: #6FE080; border: 1px solid rgba(50,180,80,0.3); }
-  #connBadge .room-code {
-    font-family: monospace; font-size: 20px; font-weight: 700;
-    letter-spacing: 4px; color: #fff; display: block; margin-bottom: 2px;
+  #connBadge.on {
+    display: block; background: rgba(50,180,80,0.25); color: #6FE080;
+    border: 1px solid rgba(50,180,80,0.3);
   }
-  #connBadge .room-label { font-size: 11px; opacity: 0.6; }
+  .badge-name { font-size: 15px; font-weight: 600; color: #fff; display: block; margin-bottom: 2px; }
+  .badge-info { font-size: 11px; opacity: 0.7; }
+  .badge-logout {
+    font-size: 10px; opacity: 0.5; cursor: pointer;
+    margin-top: 4px; display: block;
+  }
+  .badge-logout:hover { opacity: 1; color: #F06878; }
+  #nametags {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+  }
+  .nametag {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    color: #fff; font-size: 11px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    white-space: nowrap; pointer-events: none;
+    font-family: system-ui; font-weight: 500;
+  }
 </style>
 </head>
 <body>
 
 <div id="lobby">
   <div id="lobby-box">
-    <h2>Demo Multijoueur</h2>
-    <button id="btnCreate">Creer une salle</button>
-    <div id="roomInfo" style="display:none">
-      <div id="roomCode"></div>
-      <div class="waiting" id="waitText">En attente d'un joueur...</div>
+    <h2>Pokemon World</h2>
+    <div id="auth-tabs">
+      <button class="tab active" data-tab="login">Connexion</button>
+      <button class="tab" data-tab="register">Inscription</button>
     </div>
-    <hr class="lobby-divider">
-    <input id="inputCode" placeholder="CODE" maxlength="4">
-    <button id="btnJoin">Rejoindre une salle</button>
+    <div id="tab-login">
+      <input id="loginEmail" type="email" placeholder="Email">
+      <input id="loginPass" type="password" placeholder="Mot de passe">
+      <button class="action-btn" id="btnLogin">Se connecter</button>
+    </div>
+    <div id="tab-register" style="display:none">
+      <input id="regEmail" type="email" placeholder="Email">
+      <input id="regName" type="text" placeholder="Nom de dresseur" maxlength="16">
+      <input id="regPass" type="password" placeholder="Mot de passe (6+ caracteres)">
+      <input id="regPass2" type="password" placeholder="Confirmer le mot de passe">
+      <button class="action-btn" id="btnRegister">Creer un compte</button>
+    </div>
     <div id="status"></div>
-    <div class="solo-link" id="btnSolo">Jouer seul</div>
+    <div class="solo-link" id="btnSolo">Jouer hors ligne</div>
   </div>
 </div>
 
 <div id="connBadge"></div>
+<div id="nametags"></div>
 <div id="info" style="display:none">Fleches / WASD pour se deplacer</div>
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js';
 
 document.getElementById('info').style.display = '';
 
 // ===================== CONSTANTS =====================
-const TILE = 1;
-const MAP_W = 14;
-const MAP_H = 12;
-const MOVE_SPEED = 3.2;
+var TILE = 1;
+var MAP_W = 14;
+var MAP_H = 12;
+var MOVE_SPEED = 3.2;
 
-const G = 0, P = 1, W = 2, T = 3, H = 4, R = 5, D = 6, F = 7;
+var G = 0, P = 1, W = 2, T = 3, H = 4, R = 5, D = 6, F = 7;
 
-const MAP = [
+var MAP = [
   [T,T,T,G,G,G,G,G,G,G,G,T,T,T],
   [T,G,G,G,F,G,G,G,G,F,G,G,G,T],
   [G,G,R,R,R,G,G,G,R,R,R,R,G,G],
@@ -433,18 +465,17 @@ function createPlayer(bodyColor, hatColor) {
   return { group: group, parts: parts, baseYs: baseYs };
 }
 
-// Player colors palette
 var PLAYER_COLORS = [0xE04040, 0x4080E0, 0x40C040, 0xA040E0, 0xE08040, 0xE040A0, 0x40C0C0, 0xC0C040];
 
-// Local player (red)
 var local = createPlayer(0xE04040, 0xE04040);
 var playerGroup = local.group;
 var playerX = 6, playerZ = 6;
 playerGroup.position.set(playerX, 0, playerZ);
 scene.add(playerGroup);
 
-// Dynamic remote players: peerId -> { player, state }
+// ===================== REMOTE PLAYERS =====================
 var remotePlayers = {};
+var nametagContainer = document.getElementById('nametags');
 
 function getOrCreateRemote(pid, colorIndex) {
   if (!remotePlayers[pid]) {
@@ -452,7 +483,10 @@ function getOrCreateRemote(pid, colorIndex) {
     var p = createPlayer(c, c);
     p.group.position.set(6, 0, 6);
     scene.add(p.group);
-    remotePlayers[pid] = { player: p, state: { x: 6, z: 6, ry: 0, m: false } };
+    var tag = document.createElement('div');
+    tag.className = 'nametag';
+    nametagContainer.appendChild(tag);
+    remotePlayers[pid] = { player: p, state: { x: 6, z: 6, ry: 0, m: false }, name: '', tag: tag };
   }
   return remotePlayers[pid];
 }
@@ -460,13 +494,14 @@ function getOrCreateRemote(pid, colorIndex) {
 function removeRemote(pid) {
   if (remotePlayers[pid]) {
     scene.remove(remotePlayers[pid].player.group);
+    if (remotePlayers[pid].tag) remotePlayers[pid].tag.remove();
     delete remotePlayers[pid];
   }
 }
 
 // ===================== INPUT =====================
 var keys = {};
-var lobbyVisible = true;
+var localMoving = false;
 window.addEventListener('keydown', function(e) {
   if (e.target.tagName === 'INPUT') return;
   keys[e.code] = true;
@@ -477,20 +512,27 @@ window.addEventListener('keyup', function(e) {
   keys[e.code] = false;
 });
 
-// ===================== NETWORKING =====================
-var peer = null;
-var isHost = false;
-var isConnected = false;
-var lastSendTime = 0;
-var myPeerId = null;
+// ===================== FIREBASE =====================
+var fb = window.firebase;
+fb.initializeApp({
+  apiKey: "AIzaSyDCpaLs-HjZFEUqnaLPYvtiug1-6wvO0m0",
+  authDomain: "fangame-demo.firebaseapp.com",
+  databaseURL: "https://fangame-demo-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "fangame-demo",
+  storageBucket: "fangame-demo.firebasestorage.app",
+  messagingSenderId: "824308900575",
+  appId: "1:824308900575:web:28eb2ab2afd2b18ec8ff6a"
+});
+var auth = fb.auth();
+var db = fb.database();
 
-// Host: all client connections & their states
-var clients = {};       // peerId -> { conn, colorIndex, state }
-var nextColorIndex = 1; // 0 = host (red)
-var localMoving = false; // tracked for host broadcast
-
-// Client: single connection to host
-var hostConn = null;
+// ===================== GAME STATE =====================
+var myUid = null;
+var myName = '';
+var myColor = 0;
+var isOnline = false;
+var presenceRef = null;
+var enteringWorld = false;
 
 var lobbyEl = document.getElementById('lobby');
 var statusEl = document.getElementById('status');
@@ -502,156 +544,276 @@ function showStatus(msg, isError) {
 }
 
 function hideLobby() {
-  lobbyVisible = false;
   lobbyEl.classList.add('hidden');
 }
 
-var roomCode = '';
 function updateBadge() {
+  if (!myUid) { badge.style.display = 'none'; return; }
   var count = Object.keys(remotePlayers).length;
-  if (roomCode) {
-    var label = count > 0 ? (count + 1) + ' joueurs' : 'En attente';
-    badge.innerHTML = '<span class="room-code">' + roomCode + '</span><span class="room-label">' + label + '</span>';
-    badge.className = 'on';
-    badge.style.display = 'block';
-  } else if (count > 0) {
-    badge.innerHTML = '<span class="room-label">' + (count + 1) + ' joueurs</span>';
-    badge.className = 'on';
-    badge.style.display = 'block';
+  var label = count > 0 ? (count + 1) + ' en ligne' : 'En ligne';
+  badge.innerHTML = '<span class="badge-name">' + myName + '</span>' +
+    '<span class="badge-info">' + label + '</span>' +
+    '<span class="badge-logout" id="logoutBtn">Deconnexion</span>';
+  badge.className = 'on';
+  badge.style.display = 'block';
+  document.getElementById('logoutBtn').onclick = logout;
+}
+
+// ===================== AUTH =====================
+async function enterWorld(uid, displayName, colorIndex) {
+  myUid = uid;
+  myName = displayName;
+  myColor = colorIndex;
+
+  // Apply player color
+  var c = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
+  local.parts[0].material.color.setHex(c); // body
+  local.parts[3].material.color.setHex(c); // hat
+  local.parts[4].material.color.setHex(c); // brim
+
+  // Load saved position
+  try {
+    var snap = await db.ref('users/' + uid + '/gameState').once('value');
+    var gameState = snap.val();
+    if (gameState && gameState.position) {
+      playerX = gameState.position.x;
+      playerZ = gameState.position.z;
+      playerGroup.position.set(playerX, 0, playerZ);
+      if (gameState.position.ry !== undefined) {
+        playerGroup.rotation.y = gameState.position.ry;
+        targetAngle = gameState.position.ry;
+      }
+    }
+  } catch (e) { console.error('Load failed:', e); }
+
+  hideLobby();
+  goOnline();
+}
+
+// Auto-login on page load
+auth.onAuthStateChanged(async function(user) {
+  if (user && !myUid && !enteringWorld) {
+    enteringWorld = true;
+    showStatus('Connexion automatique...', false);
+    try {
+      var snap = await db.ref('users/' + user.uid + '/profile').once('value');
+      var profile = snap.val();
+      if (profile) {
+        await enterWorld(user.uid, profile.displayName, profile.color);
+      }
+    } catch (e) {
+      console.error('Auto-login failed:', e);
+      showStatus('', false);
+    }
+    enteringWorld = false;
+  }
+});
+
+async function logout() {
+  goOffline();
+  myUid = null;
+  myName = '';
+  isOnline = false;
+  try { await auth.signOut(); } catch (e) {}
+  lobbyEl.classList.remove('hidden');
+  badge.style.display = 'none';
+  playerX = 6; playerZ = 6;
+  playerGroup.position.set(playerX, 0, playerZ);
+  showStatus('', false);
+}
+
+function firebaseError(code) {
+  switch (code) {
+    case 'auth/email-already-in-use': return 'Cet email est deja utilise';
+    case 'auth/invalid-email': return 'Email invalide';
+    case 'auth/wrong-password': return 'Mot de passe incorrect';
+    case 'auth/user-not-found': return 'Aucun compte avec cet email';
+    case 'auth/weak-password': return 'Mot de passe trop faible (6+ caracteres)';
+    case 'auth/too-many-requests': return 'Trop de tentatives, reessaie plus tard';
+    case 'auth/invalid-credential': return 'Email ou mot de passe incorrect';
+    default: return 'Erreur: ' + code;
   }
 }
 
-// === HOST: broadcast all player states to all clients ===
-function hostBroadcast(time) {
-  if (!isHost) return;
-  var allStates = {};
-  // Host's own state
-  allStates[myPeerId] = { x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: localMoving, c: 0 };
-  // All clients' states
-  for (var pid in clients) {
-    if (clients[pid].state) {
-      allStates[pid] = clients[pid].state;
-      allStates[pid].c = clients[pid].colorIndex;
+// ===================== PRESENCE & SYNC =====================
+function goOnline() {
+  if (isOnline || !myUid) return;
+  isOnline = true;
+
+  presenceRef = db.ref('presence/' + myUid);
+  presenceRef.set({
+    x: Math.round(playerX * 100) / 100,
+    z: Math.round(playerZ * 100) / 100,
+    ry: Math.round(playerGroup.rotation.y * 100) / 100,
+    m: false,
+    c: myColor,
+    name: myName,
+    lastSeen: fb.database.ServerValue.TIMESTAMP
+  });
+  presenceRef.onDisconnect().remove();
+
+  // Re-setup presence on reconnect
+  db.ref('.info/connected').on('value', function(snap) {
+    if (snap.val() === true && myUid && presenceRef) {
+      presenceRef.onDisconnect().remove();
     }
-  }
-  var msg = { t: 'state', p: allStates };
-  for (var pid in clients) {
-    if (clients[pid].conn.open) {
-      try { clients[pid].conn.send(msg); } catch(e) {}
+  });
+
+  // Listen for other players
+  var allPresence = db.ref('presence');
+
+  allPresence.on('child_added', function(snap) {
+    if (snap.key === myUid) return;
+    var d = snap.val();
+    var rp = getOrCreateRemote(snap.key, d.c);
+    rp.state.x = d.x; rp.state.z = d.z; rp.state.ry = d.ry; rp.state.m = d.m;
+    rp.name = d.name || '???';
+    if (rp.tag) rp.tag.textContent = rp.name;
+    updateBadge();
+  });
+
+  allPresence.on('child_changed', function(snap) {
+    if (snap.key === myUid) return;
+    var d = snap.val();
+    if (remotePlayers[snap.key]) {
+      var s = remotePlayers[snap.key].state;
+      s.x = d.x; s.z = d.z; s.ry = d.ry; s.m = d.m;
     }
-  }
+  });
+
+  allPresence.on('child_removed', function(snap) {
+    if (snap.key === myUid) return;
+    removeRemote(snap.key);
+    updateBadge();
+  });
+
+  updateBadge();
 }
 
-// === HOST: handle new client connection ===
-function hostOnConnection(c) {
-  var colorIdx = nextColorIndex++;
-  var sharedState = { x: 6, z: 6, ry: 0, m: false, c: colorIdx };
-  clients[c.peer] = { conn: c, colorIndex: colorIdx, state: sharedState };
-  getOrCreateRemote(c.peer, colorIdx);
-  remotePlayers[c.peer].state = sharedState; // same object for network + rendering
+function goOffline() {
+  if (!isOnline || !myUid) return;
+  isOnline = false;
+  saveGame();
+  if (presenceRef) { try { presenceRef.remove(); } catch (e) {} }
+  db.ref('presence').off();
+  db.ref('.info/connected').off();
+  for (var pid in remotePlayers) removeRemote(pid);
+}
 
-  c.on('open', function() {
-    c.send({ t: 'welcome', c: colorIdx, id: c.peer });
-    isConnected = true;
-    updateBadge();
-  });
+// Sync position (10Hz with delta check)
+var lastSync = { x: 0, z: 0, ry: 0, m: false };
+var lastSyncTime = 0;
 
-  c.on('data', function(data) {
-    if (clients[c.peer]) {
-      clients[c.peer].state.x = data.x;
-      clients[c.peer].state.z = data.z;
-      clients[c.peer].state.ry = data.ry;
-      clients[c.peer].state.m = data.m;
-    }
-  });
+function syncPosition(time) {
+  if (!myUid || !isOnline || !presenceRef) return;
+  if (time - lastSyncTime < 0.1) return;
 
-  c.on('close', function() {
-    removeRemote(c.peer);
-    delete clients[c.peer];
-    updateBadge();
-  });
-  c.on('error', function() {
-    removeRemote(c.peer);
-    delete clients[c.peer];
+  var ry = playerGroup.rotation.y;
+  var m = localMoving;
+  var sx = Math.round(playerX * 100) / 100;
+  var sz = Math.round(playerZ * 100) / 100;
+  var sry = Math.round(ry * 100) / 100;
+
+  if (sx === lastSync.x && sz === lastSync.z && sry === lastSync.ry && m === lastSync.m) return;
+
+  lastSyncTime = time;
+  lastSync = { x: sx, z: sz, ry: sry, m: m };
+
+  presenceRef.update({
+    x: sx, z: sz, ry: sry, m: m,
+    lastSeen: fb.database.ServerValue.TIMESTAMP
   });
 }
 
-// === CLIENT: handle data from host ===
-function clientOnData(data) {
-  if (data.t === 'welcome') {
-    isConnected = true;
-    hideLobby();
-    // Update local player to assigned color
-    var myColor = PLAYER_COLORS[data.c % PLAYER_COLORS.length];
-    local.parts[0].material.color.setHex(myColor); // body
-    local.parts[3].material.color.setHex(myColor); // hat
-    local.parts[4].material.color.setHex(myColor); // brim
-    updateBadge();
-  } else if (data.t === 'state') {
-    var playerStates = data.p;
-    // Create/update remote players
-    for (var pid in playerStates) {
-      if (pid === myPeerId) continue;
-      var rp = getOrCreateRemote(pid, playerStates[pid].c);
-      rp.state = playerStates[pid];
-    }
-    // Remove players no longer present
-    for (var pid in remotePlayers) {
-      if (!playerStates[pid]) removeRemote(pid);
-    }
-    updateBadge();
-  }
+// ===================== SAVE / LOAD =====================
+function saveGame() {
+  if (!myUid) return;
+  db.ref('users/' + myUid + '/gameState').set({
+    position: {
+      x: Math.round(playerX * 100) / 100,
+      z: Math.round(playerZ * 100) / 100,
+      ry: Math.round(playerGroup.rotation.y * 100) / 100
+    },
+    lastSaved: fb.database.ServerValue.TIMESTAMP
+  });
 }
 
-// Create room (HOST)
-document.getElementById('btnCreate').onclick = function() {
-  var code = '';
-  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  for (var i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+// Auto-save every 60s
+setInterval(function() { if (isOnline) saveGame(); }, 60000);
+window.addEventListener('beforeunload', function() { if (isOnline) { saveGame(); goOffline(); } });
 
-  showStatus('Connexion au serveur...', false);
-  isHost = true;
-  roomCode = code;
+// ===================== UI HANDLERS =====================
+// Tab switching
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.onclick = function() {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    document.getElementById('tab-login').style.display = tab.dataset.tab === 'login' ? '' : 'none';
+    document.getElementById('tab-register').style.display = tab.dataset.tab === 'register' ? '' : 'none';
+    statusEl.textContent = '';
+  };
+});
 
-  peer = new window.Peer('fangame-' + code, { debug: 0 });
-  peer.on('open', function(id) {
-    myPeerId = id;
-    hideLobby();
-    updateBadge();
-  });
-  peer.on('connection', hostOnConnection);
-  peer.on('error', function(err) { showStatus('Erreur: ' + err.type, true); });
-};
-
-// Join room (CLIENT)
-document.getElementById('btnJoin').onclick = function() {
-  var code = document.getElementById('inputCode').value.toUpperCase().trim();
-  if (code.length < 2) { showStatus('Entre un code valide', true); return; }
-
+// Login
+document.getElementById('btnLogin').onclick = async function() {
+  var email = document.getElementById('loginEmail').value.trim();
+  var pass = document.getElementById('loginPass').value;
+  if (!email || !pass) { showStatus('Remplis tous les champs', true); return; }
   showStatus('Connexion...', false);
-
-  peer = new window.Peer(undefined, { debug: 0 });
-  peer.on('open', function(id) {
-    myPeerId = id;
-    hostConn = peer.connect('fangame-' + code, { reliable: true });
-    hostConn.on('open', function() {
-      isConnected = true;
-      hideLobby();
-    });
-    hostConn.on('data', clientOnData);
-    hostConn.on('close', function() {
-      isConnected = false;
-      for (var pid in remotePlayers) removeRemote(pid);
-      badge.textContent = 'Deconnecte';
-      badge.className = '';
-      badge.style.display = 'block';
-    });
-    hostConn.on('error', function() { showStatus('Impossible de rejoindre', true); });
-  });
-  peer.on('error', function(err) { showStatus('Erreur: ' + err.type, true); });
+  enteringWorld = true;
+  try {
+    var cred = await auth.signInWithEmailAndPassword(email, pass);
+    var snap = await db.ref('users/' + cred.user.uid + '/profile').once('value');
+    var profile = snap.val();
+    if (profile) {
+      await enterWorld(cred.user.uid, profile.displayName, profile.color);
+    } else {
+      showStatus('Profil introuvable', true);
+    }
+  } catch (e) {
+    showStatus(firebaseError(e.code), true);
+  } finally {
+    enteringWorld = false;
+  }
 };
 
-// Solo
+// Register
+document.getElementById('btnRegister').onclick = async function() {
+  var email = document.getElementById('regEmail').value.trim();
+  var name = document.getElementById('regName').value.trim();
+  var pass = document.getElementById('regPass').value;
+  var pass2 = document.getElementById('regPass2').value;
+  if (!email || !name || !pass) { showStatus('Remplis tous les champs', true); return; }
+  if (pass !== pass2) { showStatus('Les mots de passe ne correspondent pas', true); return; }
+  if (pass.length < 6) { showStatus('Mot de passe trop court (6 min)', true); return; }
+  if (name.length < 2 || name.length > 16) { showStatus('Nom: 2-16 caracteres', true); return; }
+  showStatus('Creation du compte...', false);
+  enteringWorld = true;
+  try {
+    var cred = await auth.createUserWithEmailAndPassword(email, pass);
+    var colorIndex = Math.floor(Math.random() * PLAYER_COLORS.length);
+    await db.ref('users/' + cred.user.uid + '/profile').set({
+      displayName: name,
+      color: colorIndex,
+      createdAt: fb.database.ServerValue.TIMESTAMP
+    });
+    await enterWorld(cred.user.uid, name, colorIndex);
+  } catch (e) {
+    showStatus(firebaseError(e.code), true);
+  } finally {
+    enteringWorld = false;
+  }
+};
+
+// Enter key submits forms
+document.getElementById('loginPass').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('btnLogin').click();
+});
+document.getElementById('regPass2').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('btnRegister').click();
+});
+
+// Solo (offline)
 document.getElementById('btnSolo').onclick = function() { hideLobby(); };
 
 // ===================== RESIZE =====================
@@ -669,6 +831,7 @@ window.addEventListener('resize', function() {
 var targetAngle = 0;
 var clock = new THREE.Clock();
 var camPosV = new THREE.Vector3();
+var projV = new THREE.Vector3();
 
 camera.position.set(playerX + CAM_DX, CAM_DY, playerZ + CAM_DZ);
 camera.lookAt(playerX, 0, playerZ);
@@ -727,7 +890,7 @@ function animate() {
   while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
   playerGroup.rotation.y += angleDiff * 10 * dt;
 
-  // --- Remote players interpolation ---
+  // --- Remote players interpolation + nametags ---
   for (var pid in remotePlayers) {
     var rp = remotePlayers[pid];
     var rg = rp.player.group;
@@ -750,17 +913,23 @@ function animate() {
         rp.player.parts[j].position.y += (rp.player.baseYs[j] - rp.player.parts[j].position.y) * 8 * dt;
       }
     }
-  }
 
-  // --- Network sync (20 Hz) ---
-  if (isConnected && time - lastSendTime > 0.05) {
-    lastSendTime = time;
-    if (isHost) {
-      hostBroadcast(time);
-    } else if (hostConn && hostConn.open) {
-      hostConn.send({ x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: moving });
+    // Nametag projection
+    if (rp.tag) {
+      projV.set(rg.position.x, 1.0, rg.position.z);
+      projV.project(camera);
+      if (projV.z < 1) {
+        rp.tag.style.display = '';
+        rp.tag.style.left = ((projV.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+        rp.tag.style.top = ((-projV.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+      } else {
+        rp.tag.style.display = 'none';
+      }
     }
   }
+
+  // --- Sync position (Firebase 10Hz) ---
+  syncPosition(time);
 
   // --- Water ---
   for (var i = 0; i < waterTiles.length; i++) {
