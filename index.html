@@ -427,6 +427,9 @@ function createPlayer(bodyColor, hatColor) {
   return { group: group, parts: parts, baseYs: baseYs };
 }
 
+// Player colors palette
+var PLAYER_COLORS = [0xE04040, 0x4080E0, 0x40C040, 0xA040E0, 0xE08040, 0xE040A0, 0x40C0C0, 0xC0C040];
+
 // Local player (red)
 var local = createPlayer(0xE04040, 0xE04040);
 var playerGroup = local.group;
@@ -434,24 +437,53 @@ var playerX = 6, playerZ = 6;
 playerGroup.position.set(playerX, 0, playerZ);
 scene.add(playerGroup);
 
-// Remote player (blue) - hidden until connected
-var remote = createPlayer(0x4080E0, 0x4080E0);
-var remoteGroup = remote.group;
-remoteGroup.visible = false;
-remoteGroup.position.set(8, 0, 6);
-scene.add(remoteGroup);
+// Dynamic remote players: peerId -> { player, state }
+var remotePlayers = {};
+
+function getOrCreateRemote(pid, colorIndex) {
+  if (!remotePlayers[pid]) {
+    var c = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
+    var p = createPlayer(c, c);
+    p.group.position.set(6, 0, 6);
+    scene.add(p.group);
+    remotePlayers[pid] = { player: p, state: { x: 6, z: 6, ry: 0, m: false } };
+  }
+  return remotePlayers[pid];
+}
+
+function removeRemote(pid) {
+  if (remotePlayers[pid]) {
+    scene.remove(remotePlayers[pid].player.group);
+    delete remotePlayers[pid];
+  }
+}
 
 // ===================== INPUT =====================
 var keys = {};
-window.addEventListener('keydown', function(e) { keys[e.code] = true; e.preventDefault(); });
-window.addEventListener('keyup', function(e) { keys[e.code] = false; });
+var lobbyVisible = true;
+window.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT') return;
+  keys[e.code] = true;
+  e.preventDefault();
+});
+window.addEventListener('keyup', function(e) {
+  if (e.target.tagName === 'INPUT') return;
+  keys[e.code] = false;
+});
 
 // ===================== NETWORKING =====================
 var peer = null;
-var conn = null;
+var isHost = false;
 var isConnected = false;
-var remoteState = { x: 8, z: 6, ry: 0, m: false };
 var lastSendTime = 0;
+var myPeerId = null;
+
+// Host: all client connections & their states
+var clients = {};       // peerId -> { conn, colorIndex, state }
+var nextColorIndex = 1; // 0 = host (red)
+
+// Client: single connection to host
+var hostConn = null;
 
 var lobbyEl = document.getElementById('lobby');
 var statusEl = document.getElementById('status');
@@ -462,53 +494,124 @@ function showStatus(msg, isError) {
   statusEl.style.color = isError ? '#F06878' : '#6FE080';
 }
 
-function onConnected() {
-  isConnected = true;
-  remoteGroup.visible = true;
+function hideLobby() {
+  lobbyVisible = false;
   lobbyEl.classList.add('hidden');
-  badge.textContent = 'Connecte';
-  badge.className = 'on';
-  badge.style.display = 'block';
 }
 
-function onDisconnected() {
-  isConnected = false;
-  remoteGroup.visible = false;
-  badge.textContent = 'Deconnecte';
-  badge.className = '';
-  badge.style.display = 'block';
-  setTimeout(function() { badge.style.display = 'none'; }, 3000);
+function updateBadge() {
+  var count = Object.keys(remotePlayers).length;
+  if (count > 0) {
+    badge.textContent = (count + 1) + ' joueurs';
+    badge.className = 'on';
+    badge.style.display = 'block';
+  } else if (isConnected) {
+    badge.textContent = 'En attente';
+    badge.className = 'on';
+    badge.style.display = 'block';
+  }
 }
 
-function setupConn(c) {
-  conn = c;
-  conn.on('open', onConnected);
-  conn.on('data', function(data) { remoteState = data; });
-  conn.on('close', onDisconnected);
-  conn.on('error', function() { onDisconnected(); });
+// === HOST: broadcast all player states to all clients ===
+function hostBroadcast(time) {
+  if (!isHost) return;
+  var allStates = {};
+  // Host's own state
+  allStates[myPeerId] = { x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: false, c: 0 };
+  // All clients' states
+  for (var pid in clients) {
+    if (clients[pid].state) {
+      allStates[pid] = clients[pid].state;
+      allStates[pid].c = clients[pid].colorIndex;
+    }
+  }
+  var msg = { t: 'state', p: allStates };
+  for (var pid in clients) {
+    if (clients[pid].conn.open) {
+      try { clients[pid].conn.send(msg); } catch(e) {}
+    }
+  }
 }
 
-// Create room
+// === HOST: handle new client connection ===
+function hostOnConnection(c) {
+  var colorIdx = nextColorIndex++;
+  clients[c.peer] = { conn: c, colorIndex: colorIdx, state: { x: 6, z: 6, ry: 0, m: false, c: colorIdx } };
+  getOrCreateRemote(c.peer, colorIdx);
+
+  c.on('open', function() {
+    c.send({ t: 'welcome', c: colorIdx, id: c.peer });
+    isConnected = true;
+    updateBadge();
+  });
+
+  c.on('data', function(data) {
+    if (clients[c.peer]) {
+      clients[c.peer].state.x = data.x;
+      clients[c.peer].state.z = data.z;
+      clients[c.peer].state.ry = data.ry;
+      clients[c.peer].state.m = data.m;
+    }
+  });
+
+  c.on('close', function() {
+    removeRemote(c.peer);
+    delete clients[c.peer];
+    updateBadge();
+  });
+  c.on('error', function() {
+    removeRemote(c.peer);
+    delete clients[c.peer];
+  });
+}
+
+// === CLIENT: handle data from host ===
+function clientOnData(data) {
+  if (data.t === 'welcome') {
+    // Could update local color, but host is always red, clients get assigned colors
+    isConnected = true;
+    hideLobby();
+    updateBadge();
+  } else if (data.t === 'state') {
+    var playerStates = data.p;
+    // Create/update remote players
+    for (var pid in playerStates) {
+      if (pid === myPeerId) continue;
+      var rp = getOrCreateRemote(pid, playerStates[pid].c);
+      rp.state = playerStates[pid];
+    }
+    // Remove players no longer present
+    for (var pid in remotePlayers) {
+      if (!playerStates[pid]) removeRemote(pid);
+    }
+    updateBadge();
+  }
+}
+
+// Create room (HOST)
 document.getElementById('btnCreate').onclick = function() {
   var code = '';
   var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (var i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
 
   showStatus('Connexion au serveur...', false);
+  isHost = true;
 
   peer = new window.Peer('fangame-' + code, { debug: 0 });
-  peer.on('open', function() {
+  peer.on('open', function(id) {
+    myPeerId = id;
     document.getElementById('roomCode').textContent = code;
     document.getElementById('roomInfo').style.display = '';
+    document.getElementById('waitText').textContent = 'En attente de joueurs...';
     showStatus('', false);
+    hideLobby();
+    updateBadge();
   });
-  peer.on('connection', function(c) { setupConn(c); });
-  peer.on('error', function(err) {
-    showStatus('Erreur: ' + err.type, true);
-  });
+  peer.on('connection', hostOnConnection);
+  peer.on('error', function(err) { showStatus('Erreur: ' + err.type, true); });
 };
 
-// Join room
+// Join room (CLIENT)
 document.getElementById('btnJoin').onclick = function() {
   var code = document.getElementById('inputCode').value.toUpperCase().trim();
   if (code.length < 2) { showStatus('Entre un code valide', true); return; }
@@ -516,20 +619,28 @@ document.getElementById('btnJoin').onclick = function() {
   showStatus('Connexion...', false);
 
   peer = new window.Peer(undefined, { debug: 0 });
-  peer.on('open', function() {
-    var c = peer.connect('fangame-' + code, { reliable: true });
-    setupConn(c);
-    c.on('error', function() { showStatus('Impossible de rejoindre', true); });
+  peer.on('open', function(id) {
+    myPeerId = id;
+    hostConn = peer.connect('fangame-' + code, { reliable: true });
+    hostConn.on('open', function() {
+      isConnected = true;
+      hideLobby();
+    });
+    hostConn.on('data', clientOnData);
+    hostConn.on('close', function() {
+      isConnected = false;
+      for (var pid in remotePlayers) removeRemote(pid);
+      badge.textContent = 'Deconnecte';
+      badge.className = '';
+      badge.style.display = 'block';
+    });
+    hostConn.on('error', function() { showStatus('Impossible de rejoindre', true); });
   });
-  peer.on('error', function(err) {
-    showStatus('Erreur: ' + err.type, true);
-  });
+  peer.on('error', function(err) { showStatus('Erreur: ' + err.type, true); });
 };
 
 // Solo
-document.getElementById('btnSolo').onclick = function() {
-  lobbyEl.classList.add('hidden');
-};
+document.getElementById('btnSolo').onclick = function() { hideLobby(); };
 
 // ===================== RESIZE =====================
 window.addEventListener('resize', function() {
@@ -603,31 +714,39 @@ function animate() {
   while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
   playerGroup.rotation.y += angleDiff * 10 * dt;
 
-  // --- Remote player interpolation ---
-  if (isConnected && remoteGroup.visible) {
-    remoteGroup.position.x += (remoteState.x - remoteGroup.position.x) * 8 * dt;
-    remoteGroup.position.z += (remoteState.z - remoteGroup.position.z) * 8 * dt;
+  // --- Remote players interpolation ---
+  for (var pid in remotePlayers) {
+    var rp = remotePlayers[pid];
+    var rg = rp.player.group;
+    var rs = rp.state;
 
-    var rDiff = remoteState.ry - remoteGroup.rotation.y;
+    rg.position.x += (rs.x - rg.position.x) * 8 * dt;
+    rg.position.z += (rs.z - rg.position.z) * 8 * dt;
+
+    var rDiff = rs.ry - rg.rotation.y;
     while (rDiff > Math.PI) rDiff -= Math.PI * 2;
     while (rDiff < -Math.PI) rDiff += Math.PI * 2;
-    remoteGroup.rotation.y += rDiff * 8 * dt;
+    rg.rotation.y += rDiff * 8 * dt;
 
-    if (remoteState.m) {
-      for (var i = 0; i < remote.parts.length; i++) {
-        remote.parts[i].position.y = remote.baseYs[i] + Math.sin(time * 12 + 1) * 0.018;
+    if (rs.m) {
+      for (var j = 0; j < rp.player.parts.length; j++) {
+        rp.player.parts[j].position.y = rp.player.baseYs[j] + Math.sin(time * 12 + 1) * 0.018;
       }
     } else {
-      for (var i = 0; i < remote.parts.length; i++) {
-        remote.parts[i].position.y += (remote.baseYs[i] - remote.parts[i].position.y) * 8 * dt;
+      for (var j = 0; j < rp.player.parts.length; j++) {
+        rp.player.parts[j].position.y += (rp.player.baseYs[j] - rp.player.parts[j].position.y) * 8 * dt;
       }
     }
   }
 
-  // --- Send position to peer (20 Hz) ---
-  if (isConnected && conn && conn.open && time - lastSendTime > 0.05) {
-    conn.send({ x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: moving });
+  // --- Network sync (20 Hz) ---
+  if (isConnected && time - lastSendTime > 0.05) {
     lastSendTime = time;
+    if (isHost) {
+      hostBroadcast(time);
+    } else if (hostConn && hostConn.open) {
+      hostConn.send({ x: playerX, z: playerZ, ry: playerGroup.rotation.y, m: moving });
+    }
   }
 
   // --- Water ---
