@@ -610,8 +610,7 @@ document.getElementById('btnCreate').onclick = function() {
   peer.on('open', function(id) {
     myPeerId = id;
     hideLobby();
-    badge.className = 'on';
-    badge.style.display = 'block';
+    updateBadge();
   });
   peer.on('connection', hostOnConnection);
   peer.on('error', function(err) { showStatus('Erreur: ' + err.type, true); });
