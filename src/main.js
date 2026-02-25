@@ -3,6 +3,12 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/database';
 
+import { createRenderer } from './engine/renderer.js';
+import { createScene } from './engine/scene.js';
+import { createCamera, VIEW_SIZE, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
+import { setupLighting } from './engine/lighting.js';
+import { createInput } from './engine/input.js';
+
 document.getElementById('info').style.display = '';
 
 // ===================== CONSTANTS =====================
@@ -34,58 +40,13 @@ function isBlocked(x, y) {
   return t === T || t === H || t === R || t === W;
 }
 
-// ===================== RENDERER =====================
-var renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
-
-// ===================== SCENE =====================
-var scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB);
-scene.fog = new THREE.FogExp2(0x87CEEB, 0.018);
-
-// ===================== CAMERA =====================
-var VIEW_SIZE = 7;
+// ===================== ENGINE SETUP =====================
+var renderer = createRenderer();
+var { scene, worldGroup } = createScene();
+var camera = createCamera();
 var aspect = window.innerWidth / window.innerHeight;
-var camera = new THREE.OrthographicCamera(
-  -VIEW_SIZE * aspect, VIEW_SIZE * aspect,
-  VIEW_SIZE, -VIEW_SIZE,
-  0.1, 100
-);
-var CAM_ANGLE = Math.PI * 0.28;
-var CAM_DIST = 14;
-var CAM_DX = 0;
-var CAM_DY = Math.sin(CAM_ANGLE) * CAM_DIST;
-var CAM_DZ = Math.cos(CAM_ANGLE) * CAM_DIST;
-
-// ===================== LIGHTING =====================
-scene.add(new THREE.AmbientLight(0xFFEEDD, 0.45));
-scene.add(new THREE.HemisphereLight(0x88BBFF, 0x445522, 0.35));
-
-var sun = new THREE.DirectionalLight(0xFFF5E0, 1.8);
-sun.position.set(MAP_W / 2 + 6, 14, MAP_H / 2 - 6);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -12;
-sun.shadow.camera.right = 12;
-sun.shadow.camera.top = 12;
-sun.shadow.camera.bottom = -12;
-sun.shadow.camera.near = 0.5;
-sun.shadow.camera.far = 35;
-sun.shadow.bias = -0.0008;
-sun.shadow.normalBias = 0.02;
-sun.shadow.radius = 4;
-sun.target.position.set(MAP_W / 2, 0, MAP_H / 2);
-scene.add(sun);
-scene.add(sun.target);
-
-scene.add(new THREE.DirectionalLight(0xAADDFF, 0.25).position.set(-4, 8, 6));
+setupLighting(scene, MAP_W, MAP_H);
+var keys = createInput();
 
 // ===================== MATERIALS =====================
 var mGrass = new THREE.MeshStandardMaterial({ color: 0x5DB858, roughness: 0.9 });
@@ -116,9 +77,6 @@ var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
 var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);
 
 // ===================== BUILD WORLD =====================
-var worldGroup = new THREE.Group();
-scene.add(worldGroup);
-
 var gnd = new THREE.Mesh(new THREE.PlaneGeometry(MAP_W + 12, MAP_H + 12), new THREE.MeshStandardMaterial({ color: 0x4DA848, roughness: 0.95 }));
 gnd.rotation.x = -Math.PI / 2;
 gnd.position.set(MAP_W / 2 - 0.5, -0.08, MAP_H / 2 - 0.5);
@@ -372,18 +330,8 @@ function removeRemote(pid) {
   }
 }
 
-// ===================== INPUT =====================
-var keys = {};
+// ===================== LOCAL STATE =====================
 var localMoving = false;
-window.addEventListener('keydown', function(e) {
-  if (e.target.tagName === 'INPUT') return;
-  keys[e.code] = true;
-  e.preventDefault();
-});
-window.addEventListener('keyup', function(e) {
-  if (e.target.tagName === 'INPUT') return;
-  keys[e.code] = false;
-});
 
 // ===================== FIREBASE =====================
 var fb = firebase;
