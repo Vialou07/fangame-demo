@@ -13,6 +13,7 @@ import { initFirebase } from './network/firebase.js';
 import { syncPosition } from './network/sync.js';
 import { saveGame, setupAutoSave } from './network/save.js';
 import { showStatus, hideLobby, showLobby, hideBadge, updateBadge, setupLobbyHandlers } from './ui/lobby.js';
+import { loadModel } from './world/modelLoader.js';
 
 document.getElementById('info').style.display = '';
 
@@ -26,6 +27,32 @@ var keys = createInput();
 
 // ===================== BUILD WORLD =====================
 var { waterTiles } = buildWorld(worldGroup);
+
+// ===================== TEST: LOAD 3D MODEL =====================
+loadModel('/fangame-demo/models/pokemon/pikachu.glb').then(function(model) {
+  // Fix orientation: model has Z-up, we need Y-up
+  model.rotation.x = -Math.PI / 2;
+
+  // Wrap in a group so bounding box accounts for rotation
+  var wrapper = new THREE.Group();
+  wrapper.add(model);
+
+  var box = new THREE.Box3().setFromObject(wrapper);
+  var size = box.getSize(new THREE.Vector3());
+
+  // Scale to ~0.8 units tall
+  var s = 0.8 / size.y;
+  wrapper.scale.set(s, s, s);
+
+  // Sit on ground
+  box.setFromObject(wrapper);
+  wrapper.position.set(4, -box.min.y, 5);
+
+  scene.add(wrapper);
+  console.log('Pikachu loaded at (4, 5), height:', size.y.toFixed(2));
+}).catch(function(err) {
+  console.warn('Could not load test model:', err);
+});
 
 // ===================== LOCAL PLAYER =====================
 var local = createPlayer(0xE04040, 0xE04040);

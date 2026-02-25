@@ -21,5 +21,7 @@ export function setupLighting(scene, mapW, mapH) {
   scene.add(sun);
   scene.add(sun.target);
 
-  scene.add(new THREE.DirectionalLight(0xAADDFF, 0.25).position.set(-4, 8, 6));
+  var fill = new THREE.DirectionalLight(0xAADDFF, 0.25);
+  fill.position.set(-4, 8, 6);
+  scene.add(fill);
 }
