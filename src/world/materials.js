@@ -25,6 +25,20 @@ export var mFlowers = [
 ];
 export var mStone = new THREE.MeshStandardMaterial({ color: 0x999, roughness: 0.85 });
 
+// Tree variants
+export var mLeafDark = new THREE.MeshStandardMaterial({ color: 0x1E6B30, roughness: 0.7 });
+export var mPine = new THREE.MeshStandardMaterial({ color: 0x2A7A3A, roughness: 0.7 });
+export var mPineD = new THREE.MeshStandardMaterial({ color: 0x1C5A28, roughness: 0.75 });
+export var mBush = new THREE.MeshStandardMaterial({ color: 0x3A9848, roughness: 0.6 });
+export var mBushD = new THREE.MeshStandardMaterial({ color: 0x2D7838, roughness: 0.65 });
+
+// Building details
+export var mFoundation = new THREE.MeshStandardMaterial({ color: 0x6B6B6B, roughness: 0.9 });
+export var mShutter = new THREE.MeshStandardMaterial({ color: 0x3A6B8A, roughness: 0.7 });
+export var mChimney = new THREE.MeshStandardMaterial({ color: 0x8B4444, roughness: 0.8 });
+export var mAwning = new THREE.MeshStandardMaterial({ color: 0x7B3B2A, roughness: 0.65 });
+export var mStep = new THREE.MeshStandardMaterial({ color: 0xC8B898, roughness: 0.85 });
+
 // ===================== SHARED GEOS =====================
 export var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
 export var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);

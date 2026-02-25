@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F } from '../data/map.js';
 import {
-  mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL,
+  mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
+  mPine, mPineD, mBush, mBushD,
   mWall, mRoof, mDoor, mDoorF, mGlass, mKnob, mStem, mFCenter, mFlowers, mStone,
+  mFoundation, mShutter, mChimney, mAwning, mStep,
   tileGeo, waterGeo
 } from './materials.js';
 
@@ -34,7 +36,8 @@ function buildTile(worldGroup, x, y, type) {
   switch (type) {
     case G:
       addBox(worldGroup, x, y, 0, tileGeo, (x + y) % 3 === 0 ? mGrassD : mGrass, true);
-      if (Math.random() > 0.4) addGrassBlades(worldGroup, x, y);
+      addGrassBlades(worldGroup, x, y);
+      if ((x * 7 + y * 13) % 4 === 0) addTallGrass(worldGroup, x, y);
       break;
     case P:
       addBox(worldGroup, x, y, -0.01, tileGeo, mPath, true);
@@ -45,10 +48,14 @@ function buildTile(worldGroup, x, y, type) {
       var w = addBox(worldGroup, x, y, -0.03, waterGeo, mWater, true);
       waterTiles.push(w);
       break;
-    case T:
+    case T: {
       addBox(worldGroup, x, y, 0, tileGeo, mGrassD, true);
-      addTree(worldGroup, x, y);
+      var treeType = pickTreeType(x, y);
+      if (treeType === 0) addTreeRound(worldGroup, x, y);
+      else if (treeType === 1) addTreePine(worldGroup, x, y);
+      else addBush(worldGroup, x, y);
       break;
+    }
     case H: addHouseWall(worldGroup, x, y); break;
     case R: addHouseRoof(worldGroup, x, y); break;
     case D: addDoor(worldGroup, x, y); break;
@@ -68,18 +75,55 @@ function addBox(worldGroup, x, z, yOff, geo, mat, shadow) {
   return m;
 }
 
+// Deterministic seed based on tile position (same for all players)
+function tileSeed(x, z) {
+  var s = (x * 73856093) ^ (z * 19349669);
+  return function() {
+    s = (s ^ (s << 13)) & 0x7fffffff;
+    s = (s ^ (s >> 17)) & 0x7fffffff;
+    s = (s ^ (s << 5)) & 0x7fffffff;
+    return (s & 0x7fffffff) / 0x7fffffff;
+  };
+}
+
 function addGrassBlades(worldGroup, wx, wz) {
-  for (var i = 0; i < 3 + Math.floor(Math.random() * 4); i++) {
+  var rng = tileSeed(wx * 100, wz * 100);
+  var count = 5 + Math.floor(rng() * 6); // 5-10 blades (was 3-7)
+  for (var i = 0; i < count; i++) {
+    var h = 0.1 + rng() * 0.18;
     var blade = new THREE.Mesh(
-      new THREE.ConeGeometry(0.02, 0.13 + Math.random() * 0.12, 4),
+      new THREE.ConeGeometry(0.018, h, 4),
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(0.3 + Math.random() * 0.05, 0.6, 0.32 + Math.random() * 0.15),
+        color: new THREE.Color().setHSL(0.3 + rng() * 0.06, 0.55 + rng() * 0.15, 0.28 + rng() * 0.18),
         roughness: 0.8
       })
     );
-    blade.position.set(wx + (Math.random() - 0.5) * 0.8, 0.12, wz + (Math.random() - 0.5) * 0.8);
-    blade.rotation.x = (Math.random() - 0.5) * 0.3;
-    blade.rotation.z = (Math.random() - 0.5) * 0.3;
+    blade.position.set(wx + (rng() - 0.5) * 0.85, h / 2 + 0.06, wz + (rng() - 0.5) * 0.85);
+    blade.rotation.x = (rng() - 0.5) * 0.35;
+    blade.rotation.z = (rng() - 0.5) * 0.35;
+    blade.castShadow = true;
+    worldGroup.add(blade);
+  }
+}
+
+// Tall grass tuft (appears on ~25% of grass tiles)
+function addTallGrass(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 200 + 7, wz * 200 + 13);
+  var count = 3 + Math.floor(rng() * 3);
+  for (var i = 0; i < count; i++) {
+    var h = 0.25 + rng() * 0.15;
+    var blade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.025, h, 4),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(0.28 + rng() * 0.04, 0.65, 0.25 + rng() * 0.1),
+        roughness: 0.75
+      })
+    );
+    var ox = (rng() - 0.5) * 0.4;
+    var oz = (rng() - 0.5) * 0.4;
+    blade.position.set(wx + ox, h / 2 + 0.06, wz + oz);
+    blade.rotation.x = (rng() - 0.5) * 0.2;
+    blade.rotation.z = (rng() - 0.5) * 0.2;
     blade.castShadow = true;
     worldGroup.add(blade);
   }
@@ -92,86 +136,254 @@ function addPebble(worldGroup, wx, wz) {
   worldGroup.add(p);
 }
 
-function addTree(worldGroup, wx, wz) {
+// Pick tree type deterministically: 0=round, 1=pine, 2=bush
+function pickTreeType(x, z) {
+  var h = ((x * 73856093) ^ (z * 19349669)) & 0x7fffffff;
+  return h % 3;
+}
+
+// Round tree — big leafy canopy (improved original)
+function addTreeRound(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 300 + 1, wz * 300 + 1);
   var g = new THREE.Group();
-  var tH = 0.8 + Math.random() * 0.3;
-  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, tH, 8), mTrunk);
+  var tH = 0.7 + rng() * 0.35;
+  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, tH, 8), mTrunk);
   trunk.position.y = tH / 2 + 0.06;
   trunk.castShadow = true; trunk.receiveShadow = true;
   g.add(trunk);
 
-  var base = tH + 0.1;
-  [[0, base + 0.3, 0, 0.45], [-0.15, base + 0.1, 0.1, 0.35], [0.15, base + 0.15, -0.1, 0.32], [0, base + 0.55, 0, 0.3], [-0.1, base + 0.2, -0.15, 0.28]].forEach(function(s) {
-    var leaf = new THREE.Mesh(new THREE.SphereGeometry(s[3], 8, 6), Math.random() > 0.4 ? mLeaf : mLeafL);
-    leaf.position.set(s[0], s[1], s[2]);
+  // Main canopy — 1 big sphere + 2-3 smaller ones
+  var base = tH + 0.05;
+  var mainR = 0.4 + rng() * 0.15;
+  var mainLeaf = new THREE.Mesh(
+    new THREE.SphereGeometry(mainR, 8, 6),
+    rng() > 0.5 ? mLeaf : mLeafL
+  );
+  mainLeaf.position.set(0, base + mainR * 0.7, 0);
+  mainLeaf.castShadow = true; mainLeaf.receiveShadow = true;
+  g.add(mainLeaf);
+
+  var extras = 2 + Math.floor(rng() * 2);
+  for (var i = 0; i < extras; i++) {
+    var r = 0.2 + rng() * 0.15;
+    var angle = rng() * Math.PI * 2;
+    var dist = 0.15 + rng() * 0.1;
+    var leaf = new THREE.Mesh(
+      new THREE.SphereGeometry(r, 7, 5),
+      rng() > 0.3 ? mLeaf : (rng() > 0.5 ? mLeafL : mLeafDark)
+    );
+    leaf.position.set(
+      Math.cos(angle) * dist,
+      base + mainR * 0.5 + rng() * 0.2,
+      Math.sin(angle) * dist
+    );
     leaf.castShadow = true; leaf.receiveShadow = true;
     g.add(leaf);
-  });
+  }
 
   g.position.set(wx, 0, wz);
-  g.rotation.y = Math.random() * Math.PI * 2;
+  g.rotation.y = rng() * Math.PI * 2;
+  worldGroup.add(g);
+}
+
+// Pine tree — conifer with stacked cones
+function addTreePine(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 400 + 2, wz * 400 + 2);
+  var g = new THREE.Group();
+  var tH = 0.9 + rng() * 0.4;
+  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, tH, 6), mTrunk);
+  trunk.position.y = tH / 2 + 0.06;
+  trunk.castShadow = true; trunk.receiveShadow = true;
+  g.add(trunk);
+
+  // 3 stacked cones, bottom to top (wider to narrower)
+  var layers = [
+    { y: tH * 0.45, r: 0.38, h: 0.45 },
+    { y: tH * 0.7, r: 0.28, h: 0.4 },
+    { y: tH * 0.95, r: 0.18, h: 0.35 }
+  ];
+  for (var i = 0; i < layers.length; i++) {
+    var l = layers[i];
+    var cone = new THREE.Mesh(
+      new THREE.ConeGeometry(l.r + rng() * 0.05, l.h, 8),
+      rng() > 0.4 ? mPine : mPineD
+    );
+    cone.position.y = l.y + 0.06;
+    cone.castShadow = true; cone.receiveShadow = true;
+    g.add(cone);
+  }
+
+  g.position.set(wx, 0, wz);
+  worldGroup.add(g);
+}
+
+// Bush — low, no trunk, flattened sphere(s)
+function addBush(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 500 + 3, wz * 500 + 3);
+  var g = new THREE.Group();
+
+  var mainR = 0.25 + rng() * 0.1;
+  var main = new THREE.Mesh(
+    new THREE.SphereGeometry(mainR, 8, 5),
+    rng() > 0.5 ? mBush : mBushD
+  );
+  main.scale.y = 0.6; // flatten
+  main.position.y = mainR * 0.5 + 0.06;
+  main.castShadow = true; main.receiveShadow = true;
+  g.add(main);
+
+  // 1-2 extra lumps
+  var lumps = 1 + Math.floor(rng() * 2);
+  for (var i = 0; i < lumps; i++) {
+    var r = 0.15 + rng() * 0.08;
+    var angle = rng() * Math.PI * 2;
+    var lump = new THREE.Mesh(
+      new THREE.SphereGeometry(r, 7, 4),
+      rng() > 0.5 ? mBush : mBushD
+    );
+    lump.scale.y = 0.55;
+    lump.position.set(
+      Math.cos(angle) * 0.15,
+      r * 0.45 + 0.06,
+      Math.sin(angle) * 0.15
+    );
+    lump.castShadow = true; lump.receiveShadow = true;
+    g.add(lump);
+  }
+
+  g.position.set(wx, 0, wz);
   worldGroup.add(g);
 }
 
 function addHouseWall(worldGroup, wx, wz) {
   addBox(worldGroup, wx, wz, 0, tileGeo, mGrass, true);
-  var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.9, TILE), mWall);
-  wall.position.set(wx, 0.51, wz);
+
+  // Foundation strip (dark grey band at bottom)
+  var found = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.12, TILE), mFoundation);
+  found.position.set(wx, 0.12, wz);
+  found.castShadow = true; found.receiveShadow = true;
+  worldGroup.add(found);
+
+  // Main wall (sits on top of foundation)
+  var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.78, TILE), mWall);
+  wall.position.set(wx, 0.57, wz);
   wall.castShadow = true; wall.receiveShadow = true;
   worldGroup.add(wall);
 
+  // Window with shutters on exposed faces
   if (wz + 1 < MAP_H) {
     var below = MAP[wz + 1][wx];
     if (below !== H && below !== R && below !== D) {
-      var win = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), mGlass);
+      // Glass pane
+      var win = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.02), mGlass);
       win.position.set(wx, 0.6, wz + 0.51);
       worldGroup.add(win);
-      var fr = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.01), mDoorF);
+      // Window frame
+      var fr = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.01), mDoorF);
       fr.position.set(wx, 0.6, wz + 0.505);
       worldGroup.add(fr);
+      // Left shutter
+      var sL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.02), mShutter);
+      sL.position.set(wx - 0.22, 0.6, wz + 0.515);
+      sL.rotation.y = 0.15;
+      worldGroup.add(sL);
+      // Right shutter
+      var sR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.02), mShutter);
+      sR.position.set(wx + 0.22, 0.6, wz + 0.515);
+      sR.rotation.y = -0.15;
+      worldGroup.add(sR);
     }
   }
 }
 
 function addHouseRoof(worldGroup, wx, wz) {
+  // Wall under the roof
   var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.9, TILE), mWall);
   wall.position.set(wx, 0.51, wz);
   wall.castShadow = true;
   worldGroup.add(wall);
-  var roof = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.15, 0.15, TILE + 0.15), mRoof);
-  roof.position.set(wx, 1.02, wz);
+
+  // Roof overhang (wider than the wall)
+  var roof = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.2, 0.12, TILE + 0.2), mRoof);
+  roof.position.set(wx, 1.0, wz);
   roof.castShadow = true; roof.receiveShadow = true;
   worldGroup.add(roof);
-  var peak = new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.1, 0.12, TILE - 0.1), mRoof);
-  peak.position.set(wx, 1.16, wz);
+
+  // Roof middle tier
+  var mid = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.05, 0.1, TILE + 0.05), mRoof);
+  mid.position.set(wx, 1.12, wz);
+  mid.castShadow = true;
+  worldGroup.add(mid);
+
+  // Roof peak
+  var peak = new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.15, 0.1, TILE - 0.15), mRoof);
+  peak.position.set(wx, 1.22, wz);
   peak.castShadow = true;
   worldGroup.add(peak);
+
+  // Chimney (on some roof tiles, deterministic)
+  if ((wx * 5 + wz * 11) % 3 === 0) {
+    var chimney = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), mChimney);
+    chimney.position.set(wx + 0.2, 1.4, wz - 0.15);
+    chimney.castShadow = true;
+    worldGroup.add(chimney);
+    // Chimney top rim
+    var rim = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.2), mChimney);
+    rim.position.set(wx + 0.2, 1.55, wz - 0.15);
+    worldGroup.add(rim);
+  }
 }
 
 function addDoor(worldGroup, wx, wz) {
   addBox(worldGroup, wx, wz, -0.01, tileGeo, mPath, true);
-  var wl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, TILE), mWall);
-  wl.position.set(wx - 0.35, 0.51, wz); wl.castShadow = true; worldGroup.add(wl);
-  var wr = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, TILE), mWall);
-  wr.position.set(wx + 0.35, 0.51, wz); wr.castShadow = true; worldGroup.add(wr);
-  var wt = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, TILE), mWall);
-  wt.position.set(wx, 0.86, wz); worldGroup.add(wt);
 
+  // Foundation under door walls
+  var fL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, TILE), mFoundation);
+  fL.position.set(wx - 0.35, 0.12, wz); worldGroup.add(fL);
+  var fR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, TILE), mFoundation);
+  fR.position.set(wx + 0.35, 0.12, wz); worldGroup.add(fR);
+
+  // Side walls
+  var wl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.78, TILE), mWall);
+  wl.position.set(wx - 0.35, 0.57, wz); wl.castShadow = true; worldGroup.add(wl);
+  var wr = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.78, TILE), mWall);
+  wr.position.set(wx + 0.35, 0.57, wz); wr.castShadow = true; worldGroup.add(wr);
+  // Top wall above door
+  var wt = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, TILE), mWall);
+  wt.position.set(wx, 0.87, wz); worldGroup.add(wt);
+
+  // Door panel
   var door = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.65, 0.06), mDoor);
-  door.position.set(wx, 0.42, wz + 0.48); door.castShadow = true; worldGroup.add(door);
+  door.position.set(wx, 0.45, wz + 0.48); door.castShadow = true; worldGroup.add(door);
 
-  [[wx - 0.2, 0.42, 0.04, 0.7], [wx + 0.2, 0.42, 0.04, 0.7]].forEach(function(p) {
+  // Door frame panels
+  [[wx - 0.2, 0.45, 0.04, 0.7], [wx + 0.2, 0.45, 0.04, 0.7]].forEach(function(p) {
     var f = new THREE.Mesh(new THREE.BoxGeometry(p[2], p[3], 0.08), mDoorF);
     f.position.set(p[0], p[1], wz + 0.48); worldGroup.add(f);
   });
   var ftop = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.08), mDoorF);
-  ftop.position.set(wx, 0.77, wz + 0.48); worldGroup.add(ftop);
+  ftop.position.set(wx, 0.8, wz + 0.48); worldGroup.add(ftop);
 
+  // Doorknob
   var knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), mKnob);
-  knob.position.set(wx + 0.12, 0.45, wz + 0.52); worldGroup.add(knob);
+  knob.position.set(wx + 0.12, 0.48, wz + 0.52); worldGroup.add(knob);
 
-  var mat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.2), new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.95 }));
-  mat.position.set(wx, 0.07, wz + 0.55); mat.receiveShadow = true; worldGroup.add(mat);
+  // Awning above the door
+  var awning = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.04, 0.25), mAwning);
+  awning.position.set(wx, 0.88, wz + 0.55);
+  awning.rotation.x = 0.15; // slight tilt forward
+  awning.castShadow = true;
+  worldGroup.add(awning);
+
+  // Steps (2 small steps in front)
+  var step1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.15), mStep);
+  step1.position.set(wx, 0.09, wz + 0.6); step1.receiveShadow = true; worldGroup.add(step1);
+  var step2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 0.18), mStep);
+  step2.position.set(wx, 0.03, wz + 0.75); step2.receiveShadow = true; worldGroup.add(step2);
+
+  // Door mat
+  var mat = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.02, 0.15), new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.95 }));
+  mat.position.set(wx, 0.1, wz + 0.55); mat.receiveShadow = true; worldGroup.add(mat);
 }
 
 function addFlowers(worldGroup, wx, wz) {
