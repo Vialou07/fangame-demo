@@ -12,6 +12,12 @@ export function createInput() {
     keys[e.code] = false;
   });
 
+  // Mobile: prevent pinch-zoom, pull-to-refresh, and double-tap zoom
+  document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+  document.addEventListener('touchmove', function(e) {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+
   // Mobile touch controls
   if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
     setupTouchControls(keys);
@@ -21,24 +27,31 @@ export function createInput() {
 }
 
 function setupTouchControls(keys) {
+  // Scale joystick for screen size
+  var small = window.innerWidth < 400;
+  var padSize = small ? 100 : 120;
+  var knobSize = small ? 38 : 44;
+  var padMargin = small ? 16 : 30;
+
   // Create joystick container
   var pad = document.createElement('div');
   pad.id = 'touch-pad';
-  pad.style.cssText = 'position:fixed;bottom:30px;left:30px;width:120px;height:120px;' +
-    'border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.3);' +
+  pad.style.cssText = 'position:fixed;bottom:' + padMargin + 'px;left:' + padMargin + 'px;' +
+    'width:' + padSize + 'px;height:' + padSize + 'px;' +
+    'border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.35);' +
     'touch-action:none;z-index:1000;display:flex;align-items:center;justify-content:center;';
 
   // Inner knob
   var knob = document.createElement('div');
-  knob.style.cssText = 'width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.4);' +
-    'pointer-events:none;transition:transform 0.08s;';
+  knob.style.cssText = 'width:' + knobSize + 'px;height:' + knobSize + 'px;border-radius:50%;' +
+    'background:rgba(255,255,255,0.45);pointer-events:none;transition:transform 0.08s;';
   pad.appendChild(knob);
   document.body.appendChild(pad);
 
   var padRect = null;
   var centerX = 0;
   var centerY = 0;
-  var radius = 60;
+  var radius = padSize / 2;
   var deadZone = 15;
   var activeTouch = null;
 
