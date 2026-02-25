@@ -48,6 +48,12 @@ export var mLamp = new THREE.MeshStandardMaterial({ color: 0x3A3A3A, roughness: 
 export var mLampLight = new THREE.MeshStandardMaterial({ color: 0xFFF8D0, roughness: 0.2, emissive: 0xFFF0A0, emissiveIntensity: 0.5 });
 export var mFenceWood = new THREE.MeshStandardMaterial({ color: 0x9B7848, roughness: 0.8 });
 
+// Water details
+export var mSand = new THREE.MeshStandardMaterial({ color: 0xD8C898, roughness: 0.9 });
+export var mReed = new THREE.MeshStandardMaterial({ color: 0x4A8838, roughness: 0.75 });
+export var mLilyPad = new THREE.MeshStandardMaterial({ color: 0x2E7830, roughness: 0.6, side: THREE.DoubleSide });
+export var mLilyFlower = new THREE.MeshStandardMaterial({ color: 0xF0A0B8, roughness: 0.4 });
+
 // ===================== SHARED GEOS =====================
 export var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
 export var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);

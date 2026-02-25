@@ -6,10 +6,12 @@ import {
   mWall, mRoof, mDoor, mDoorF, mGlass, mKnob, mStem, mFCenter, mFlowers, mStone,
   mFoundation, mShutter, mChimney, mAwning, mStep,
   mSign, mSignPost, mBench, mBenchLeg, mLamp, mLampLight, mFenceWood,
+  mSand, mReed, mLilyPad, mLilyFlower,
   tileGeo, waterGeo
 } from './materials.js';
 
 var waterTiles = [];
+var lilyPads = [];
 
 export function buildWorld(worldGroup) {
   // Ground plane
@@ -23,6 +25,7 @@ export function buildWorld(worldGroup) {
   worldGroup.add(gnd);
 
   waterTiles = [];
+  lilyPads = [];
 
   for (var y = 0; y < MAP_H; y++) {
     for (var x = 0; x < MAP_W; x++) {
@@ -30,7 +33,7 @@ export function buildWorld(worldGroup) {
     }
   }
 
-  return { waterTiles: waterTiles };
+  return { waterTiles: waterTiles, lilyPads: lilyPads };
 }
 
 function buildTile(worldGroup, x, y, type) {
@@ -48,6 +51,8 @@ function buildTile(worldGroup, x, y, type) {
       addBox(worldGroup, x, y, -0.1, tileGeo, mGrassD, false);
       var w = addBox(worldGroup, x, y, -0.03, waterGeo, mWater, true);
       waterTiles.push(w);
+      addWaterEdge(worldGroup, x, y);
+      addWaterDecor(worldGroup, x, y);
       break;
     case T: {
       addBox(worldGroup, x, y, 0, tileGeo, mGrassD, true);
@@ -404,6 +409,91 @@ function addDoor(worldGroup, wx, wz) {
   // Door mat
   var mat = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.02, 0.15), new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.95 }));
   mat.position.set(wx, 0.1, wz + 0.55); mat.receiveShadow = true; worldGroup.add(mat);
+}
+
+// Water edge — sand/pebbles where water meets land
+function addWaterEdge(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 600 + 4, wz * 600 + 4);
+  var dirs = [
+    { dx: 0, dz: -1, ox: 0, oz: -0.4 },  // north
+    { dx: 0, dz: 1, ox: 0, oz: 0.4 },     // south
+    { dx: -1, dz: 0, ox: -0.4, oz: 0 },   // west
+    { dx: 1, dz: 0, ox: 0.4, oz: 0 }      // east
+  ];
+  for (var i = 0; i < dirs.length; i++) {
+    var d = dirs[i];
+    var nx = wx + d.dx;
+    var nz = wz + d.dz;
+    if (nx < 0 || nz < 0 || nx >= MAP_W || nz >= MAP_H) continue;
+    if (MAP[nz][nx] === W) continue;
+    // This edge faces land — add sand pebbles
+    var count = 3 + Math.floor(rng() * 4);
+    for (var j = 0; j < count; j++) {
+      var spread = (rng() - 0.5) * 0.7;
+      var px = wx + d.ox + (d.dz !== 0 ? spread : (rng() - 0.5) * 0.2);
+      var pz = wz + d.oz + (d.dx !== 0 ? spread : (rng() - 0.5) * 0.2);
+      var r = 0.03 + rng() * 0.04;
+      var pebble = new THREE.Mesh(new THREE.SphereGeometry(r, 5, 4), mSand);
+      pebble.position.set(px, -0.01, pz);
+      pebble.scale.y = 0.5;
+      worldGroup.add(pebble);
+    }
+  }
+}
+
+// Water decorations — reeds on edges, lily pads on interior
+function addWaterDecor(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 700 + 5, wz * 700 + 5);
+  // Count water neighbors
+  var waterNeighbors = 0;
+  var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  for (var i = 0; i < dirs.length; i++) {
+    var nx = wx + dirs[i][0];
+    var nz = wz + dirs[i][1];
+    if (nx >= 0 && nz >= 0 && nx < MAP_W && nz < MAP_H && MAP[nz][nx] === W) {
+      waterNeighbors++;
+    }
+  }
+
+  // Edge tiles (fewer water neighbors) get reeds
+  if (waterNeighbors <= 2 && rng() > 0.5) {
+    var reeds = 2 + Math.floor(rng() * 3);
+    for (var j = 0; j < reeds; j++) {
+      var h = 0.3 + rng() * 0.25;
+      var reed = new THREE.Mesh(new THREE.ConeGeometry(0.015, h, 4), mReed);
+      reed.position.set(
+        wx + (rng() - 0.5) * 0.6,
+        h / 2,
+        wz + (rng() - 0.5) * 0.6
+      );
+      reed.rotation.x = (rng() - 0.5) * 0.15;
+      reed.rotation.z = (rng() - 0.5) * 0.15;
+      reed.castShadow = true;
+      worldGroup.add(reed);
+    }
+  }
+
+  // Interior tiles (more water neighbors) get lily pads
+  if (waterNeighbors >= 3 && rng() > 0.4) {
+    var padX = wx + (rng() - 0.5) * 0.5;
+    var padZ = wz + (rng() - 0.5) * 0.5;
+    var pad = new THREE.Mesh(
+      new THREE.CircleGeometry(0.1 + rng() * 0.06, 8),
+      mLilyPad
+    );
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(padX, -0.01, padZ);
+    worldGroup.add(pad);
+    lilyPads.push(pad);
+
+    // Some lily pads have a flower
+    if (rng() > 0.5) {
+      var flower = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), mLilyFlower);
+      flower.position.set(padX, 0.02, padZ);
+      worldGroup.add(flower);
+      lilyPads.push(flower);
+    }
+  }
 }
 
 // Sign — wooden post + panel

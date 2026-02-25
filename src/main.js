@@ -26,7 +26,7 @@ setupLighting(scene, MAP_W, MAP_H);
 var keys = createInput();
 
 // ===================== BUILD WORLD =====================
-var { waterTiles } = buildWorld(worldGroup);
+var { waterTiles, lilyPads } = buildWorld(worldGroup);
 
 // ===================== TEST: LOAD 3D MODEL =====================
 loadModel('/fangame-demo/models/pokemon/pikachu.glb').then(function(model) {
@@ -317,6 +317,9 @@ function animate() {
 
   for (var i = 0; i < waterTiles.length; i++) {
     waterTiles[i].position.y = -0.03 + Math.sin(time * 1.5 + i * 0.7) * 0.015;
+  }
+  for (var j = 0; j < lilyPads.length; j++) {
+    lilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
   }
 
   camPosV.set(playerGroup.position.x + CAM_DX, CAM_DY, playerGroup.position.z + CAM_DZ);
