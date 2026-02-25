@@ -48,6 +48,12 @@ export var mLamp = new THREE.MeshStandardMaterial({ color: 0x3A3A3A, roughness: 
 export var mLampLight = new THREE.MeshStandardMaterial({ color: 0xFFF8D0, roughness: 0.2, emissive: 0xFFF0A0, emissiveIntensity: 0.5 });
 export var mFenceWood = new THREE.MeshStandardMaterial({ color: 0x9B7848, roughness: 0.8 });
 
+// Terrain types
+export var mSandTile = new THREE.MeshStandardMaterial({ color: 0xE8D8A8, roughness: 0.95 });
+export var mRock = new THREE.MeshStandardMaterial({ color: 0x7A7A7A, roughness: 0.9 });
+export var mRockD = new THREE.MeshStandardMaterial({ color: 0x5A5A5A, roughness: 0.85 });
+export var mLava = new THREE.MeshStandardMaterial({ color: 0xE04010, roughness: 0.3, emissive: 0xFF4500, emissiveIntensity: 0.6 });
+
 // Water details
 export var mSand = new THREE.MeshStandardMaterial({ color: 0xD8C898, roughness: 0.9 });
 export var mReed = new THREE.MeshStandardMaterial({ color: 0x4A8838, roughness: 0.75 });

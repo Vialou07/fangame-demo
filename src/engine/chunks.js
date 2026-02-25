@@ -8,7 +8,7 @@ import {
   mGlass, mKnob, mStem, mFCenter, mStone, mFoundation, mShutter,
   mChimney, mAwning, mStep, mSign, mSignPost, mBench, mBenchLeg,
   mLamp, mLampLight, mFenceWood, mSand, mReed, mLilyPad, mLilyFlower,
-  mFlowers
+  mFlowers, mSandTile, mRock, mRockD, mLava
 } from '../world/materials.js';
 
 export var CHUNK_SIZE = 16;
@@ -123,7 +123,8 @@ function getSharedSets() {
       mPine, mPineD, mBush, mBushD, mWall, mRoof, mDoor, mDoorF,
       mGlass, mKnob, mStem, mFCenter, mStone, mFoundation, mShutter,
       mChimney, mAwning, mStep, mSign, mSignPost, mBench, mBenchLeg,
-      mLamp, mLampLight, mFenceWood, mSand, mReed, mLilyPad, mLilyFlower
+      mLamp, mLampLight, mFenceWood, mSand, mReed, mLilyPad, mLilyFlower,
+      mSandTile, mRock, mRockD, mLava
     ]);
   }
   return { geos: sharedGeos, mats: sharedMats };

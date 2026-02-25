@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F, S, B, L, N, TG } from '../data/map.js';
+import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F, S, B, L, N, TG, SD, RK, LV } from '../data/map.js';
 import {
   mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
   mPine, mPineD, mBush, mBushD,
@@ -7,6 +7,7 @@ import {
   mFoundation, mShutter, mChimney, mAwning, mStep,
   mSign, mSignPost, mBench, mBenchLeg, mLamp, mLampLight, mFenceWood,
   mSand, mReed, mLilyPad, mLilyFlower,
+  mSandTile, mRock, mRockD, mLava,
   bladeGeo,
   tileGeo, waterGeo
 } from './materials.js';
@@ -127,6 +128,18 @@ function buildTile(group, x, y, type) {
       addBox(group, x, y, 0, tileGeo, mGrassD, true);
       collectGrassBlades(x, y);
       collectTallGrassPatch(x, y);
+      break;
+    case SD:
+      addBox(group, x, y, -0.01, tileGeo, mSandTile, true);
+      addSandDetail(group, x, y);
+      break;
+    case RK:
+      addBox(group, x, y, 0, tileGeo, mGrassD, true);
+      addRockProp(group, x, y);
+      break;
+    case LV:
+      addBox(group, x, y, -0.05, tileGeo, mGrassD, false);
+      addLavaTile(group, x, y);
       break;
   }
 }
@@ -661,4 +674,50 @@ function addFlowers(group, wx, wz) {
     var c = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), mFCenter);
     c.position.set(fx, 0.28, fz); group.add(c);
   }
+}
+
+// ===================== NEW TERRAIN TYPES =====================
+
+function addSandDetail(group, wx, wz) {
+  var rng = tileSeed(wx * 1100 + 11, wz * 1100 + 13);
+  // Occasional small pebbles on sand
+  if (rng() > 0.7) {
+    var p = new THREE.Mesh(new THREE.SphereGeometry(0.03 + rng() * 0.03, 5, 3), mSand);
+    p.position.set(wx + (rng() - 0.5) * 0.5, 0.02, wz + (rng() - 0.5) * 0.5);
+    p.scale.y = 0.5;
+    group.add(p);
+  }
+}
+
+function addRockProp(group, wx, wz) {
+  var rng = tileSeed(wx * 1200 + 12, wz * 1200 + 14);
+  var g = new THREE.Group();
+  // Main boulder
+  var r = 0.25 + rng() * 0.2;
+  var main = new THREE.Mesh(
+    new THREE.SphereGeometry(r, 7, 5),
+    rng() > 0.5 ? mRock : mRockD
+  );
+  main.scale.set(1, 0.6 + rng() * 0.3, 1);
+  main.position.y = r * 0.4 + 0.06;
+  main.castShadow = true; main.receiveShadow = true;
+  g.add(main);
+  // Small extra rock
+  if (rng() > 0.4) {
+    var sr = 0.1 + rng() * 0.1;
+    var small = new THREE.Mesh(new THREE.SphereGeometry(sr, 6, 4), mRock);
+    small.scale.y = 0.5;
+    small.position.set((rng() - 0.5) * 0.3, sr * 0.3 + 0.06, (rng() - 0.5) * 0.3);
+    small.castShadow = true;
+    g.add(small);
+  }
+  g.position.set(wx, 0, wz);
+  g.rotation.y = rng() * Math.PI * 2;
+  group.add(g);
+}
+
+function addLavaTile(group, wx, wz) {
+  var lava = new THREE.Mesh(waterGeo, mLava);
+  lava.position.set(wx, -0.01, wz);
+  group.add(lava);
 }

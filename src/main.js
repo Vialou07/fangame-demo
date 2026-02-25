@@ -31,7 +31,7 @@ setupPinchZoom(renderer.domElement);
 
 // ===================== CHUNK SYSTEM =====================
 initChunks(worldGroup);
-updateChunks(20, 15, worldGroup); // Initial load around spawn
+updateChunks(80, 62, worldGroup); // Initial load around Bourg-Aurore spawn
 
 // ===================== CLICK-TO-MOVE =====================
 var raycaster = new THREE.Raycaster();
@@ -111,7 +111,7 @@ renderer.domElement.addEventListener('touchend', function(e) {
 // ===================== LOCAL PLAYER =====================
 var local = createPlayer(0xE04040, 0xE04040);
 var playerGroup = local.group;
-var playerX = 20, playerZ = 15;
+var playerX = 80, playerZ = 62;
 playerGroup.position.set(playerX, 0, playerZ);
 scene.add(playerGroup);
 
@@ -176,7 +176,7 @@ async function logout() {
   try { await auth.signOut(); } catch (e) {}
   showLobby();
   hideBadge();
-  playerX = 20; playerZ = 15;
+  playerX = 80; playerZ = 62;
   state.playerX = playerX;
   state.playerZ = playerZ;
   playerGroup.position.set(playerX, 0, playerZ);
