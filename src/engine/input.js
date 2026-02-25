@@ -67,10 +67,11 @@ function setupTouchControls(keys) {
 
     clearKeys();
     if (dist > deadZone) {
-      // 4-directional: pick dominant axis
-      if (Math.abs(dx) > Math.abs(dy)) {
+      // 8-directional: allow both axes for diagonals
+      if (Math.abs(dx) > deadZone * 0.5) {
         keys[dx < 0 ? 'ArrowLeft' : 'ArrowRight'] = true;
-      } else {
+      }
+      if (Math.abs(dy) > deadZone * 0.5) {
         keys[dy < 0 ? 'ArrowUp' : 'ArrowDown'] = true;
       }
     }

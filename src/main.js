@@ -14,6 +14,7 @@ import { syncPosition } from './network/sync.js';
 import { saveGame, setupAutoSave } from './network/save.js';
 import { showStatus, hideLobby, showLobby, hideBadge, updateBadge, setupLobbyHandlers } from './ui/lobby.js';
 import { loadModel } from './world/modelLoader.js';
+import { findPath } from './engine/pathfinding.js';
 
 document.getElementById('info').style.display = '';
 
@@ -52,6 +53,56 @@ loadModel('/fangame-demo/models/pokemon/pikachu.glb').then(function(model) {
   console.log('Pikachu loaded at (4, 5), height:', size.y.toFixed(2));
 }).catch(function(err) {
   console.warn('Could not load test model:', err);
+});
+
+// ===================== CLICK-TO-MOVE =====================
+var raycaster = new THREE.Raycaster();
+var mouseVec = new THREE.Vector2();
+var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+var clickTarget = new THREE.Vector3();
+var pathQueue = []; // Array of {x, z} tile centers
+var pathMarker = null;
+
+// Destination marker (pulsing ring)
+(function() {
+  var ringGeo = new THREE.RingGeometry(0.15, 0.25, 16);
+  ringGeo.rotateX(-Math.PI / 2);
+  var ringMat = new THREE.MeshBasicMaterial({ color: 0xFFFF60, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+  pathMarker = new THREE.Mesh(ringGeo, ringMat);
+  pathMarker.visible = false;
+  pathMarker.position.y = 0.08;
+  scene.add(pathMarker);
+})();
+
+function handleClickToMove(clientX, clientY) {
+  mouseVec.x = (clientX / window.innerWidth) * 2 - 1;
+  mouseVec.y = -(clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouseVec, camera);
+  if (raycaster.ray.intersectPlane(groundPlane, clickTarget)) {
+    var path = findPath(playerX, playerZ, clickTarget.x, clickTarget.z);
+    if (path.length > 0) {
+      pathQueue = path;
+      var last = path[path.length - 1];
+      pathMarker.position.x = last.x;
+      pathMarker.position.z = last.z;
+      pathMarker.visible = true;
+    }
+  }
+}
+
+// Mouse click (desktop)
+renderer.domElement.addEventListener('click', function(e) {
+  handleClickToMove(e.clientX, e.clientY);
+});
+
+// Tap (mobile) - on areas outside the joystick
+renderer.domElement.addEventListener('touchend', function(e) {
+  if (e.changedTouches.length > 0) {
+    var t = e.changedTouches[0];
+    // Ignore taps on the joystick area (bottom-left)
+    if (t.clientX < 180 && t.clientY > window.innerHeight - 180) return;
+    handleClickToMove(t.clientX, t.clientY);
+  }
 });
 
 // ===================== LOCAL PLAYER =====================
@@ -232,6 +283,32 @@ function animate() {
   if (keys['ArrowUp'] || keys['KeyW']) dz = -1;
   if (keys['ArrowDown'] || keys['KeyS']) dz = 1;
 
+  var manualInput = dx !== 0 || dz !== 0;
+
+  // Cancel pathfinding on manual input
+  if (manualInput && pathQueue.length > 0) {
+    pathQueue = [];
+    pathMarker.visible = false;
+  }
+
+  // Path following (when no manual input and path exists)
+  if (!manualInput && pathQueue.length > 0) {
+    var wp = pathQueue[0];
+    var toDx = wp.x - playerX;
+    var toDz = wp.z - playerZ;
+    var toDist = Math.sqrt(toDx * toDx + toDz * toDz);
+
+    if (toDist < 0.1) {
+      pathQueue.shift();
+      if (pathQueue.length === 0) {
+        pathMarker.visible = false;
+      }
+    } else {
+      dx = toDx / toDist;
+      dz = toDz / toDist;
+    }
+  }
+
   var moving = dx !== 0 || dz !== 0;
   state.localMoving = moving;
   if (moving) {
@@ -263,6 +340,12 @@ function animate() {
     for (var i = 0; i < local.parts.length; i++) {
       local.parts[i].position.y += (local.baseYs[i] - local.parts[i].position.y) * 8 * dt;
     }
+  }
+
+  // Pulse the path marker
+  if (pathMarker.visible) {
+    pathMarker.material.opacity = 0.4 + Math.sin(time * 4) * 0.3;
+    pathMarker.scale.setScalar(0.9 + Math.sin(time * 4) * 0.15);
   }
 
   state.playerX = playerX;
