@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 export function createScene() {
   var scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87CEEB);
-  scene.fog = new THREE.FogExp2(0x87CEEB, 0.018);
+  scene.background = new THREE.Color(0x8ED8F8);
+  scene.fog = new THREE.FogExp2(0x8ED8F8, 0.022);
 
   var worldGroup = new THREE.Group();
   scene.add(worldGroup);

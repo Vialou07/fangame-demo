@@ -1,20 +1,20 @@
 import * as THREE from 'three';
 import { TILE } from '../data/map.js';
 
-// ===================== MATERIALS =====================
-export var mGrass = new THREE.MeshStandardMaterial({ color: 0x5DB858, roughness: 0.9 });
-export var mGrassD = new THREE.MeshStandardMaterial({ color: 0x4DA848, roughness: 0.9 });
-export var mPath = new THREE.MeshStandardMaterial({ color: 0xD8C898, roughness: 0.95 });
-export var mWater = new THREE.MeshStandardMaterial({ color: 0x3A8AD8, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.82 });
-export var mTrunk = new THREE.MeshStandardMaterial({ color: 0x6B4830, roughness: 0.85 });
-export var mLeaf = new THREE.MeshStandardMaterial({ color: 0x2E8B40, roughness: 0.65 });
-export var mLeafL = new THREE.MeshStandardMaterial({ color: 0x48B848, roughness: 0.65 });
-export var mWall = new THREE.MeshStandardMaterial({ color: 0xF0E8D8, roughness: 0.7 });
-export var mRoof = new THREE.MeshStandardMaterial({ color: 0xC84848, roughness: 0.55 });
-export var mDoor = new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.75 });
-export var mDoorF = new THREE.MeshStandardMaterial({ color: 0x5A3820, roughness: 0.8 });
-export var mGlass = new THREE.MeshStandardMaterial({ color: 0x88CCFF, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.65 });
-export var mKnob = new THREE.MeshStandardMaterial({ color: 0xF0D030, roughness: 0.15, metalness: 0.85 });
+// ===================== MATERIALS (Pokemon Gen 3/4 palette) =====================
+export var mGrass = new THREE.MeshStandardMaterial({ color: 0x58C060, roughness: 0.85 });
+export var mGrassD = new THREE.MeshStandardMaterial({ color: 0x48A850, roughness: 0.85 });
+export var mPath = new THREE.MeshStandardMaterial({ color: 0xE0CFA0, roughness: 0.9 });
+export var mWater = new THREE.MeshStandardMaterial({ color: 0x4098E0, roughness: 0.03, metalness: 0.25, transparent: true, opacity: 0.85 });
+export var mTrunk = new THREE.MeshStandardMaterial({ color: 0x7A5235, roughness: 0.85 });
+export var mLeaf = new THREE.MeshStandardMaterial({ color: 0x30A048, roughness: 0.6 });
+export var mLeafL = new THREE.MeshStandardMaterial({ color: 0x50C858, roughness: 0.6 });
+export var mWall = new THREE.MeshStandardMaterial({ color: 0xF5F0E0, roughness: 0.65 });
+export var mRoof = new THREE.MeshStandardMaterial({ color: 0xD04040, roughness: 0.5 });
+export var mDoor = new THREE.MeshStandardMaterial({ color: 0x9B7040, roughness: 0.7 });
+export var mDoorF = new THREE.MeshStandardMaterial({ color: 0x603818, roughness: 0.75 });
+export var mGlass = new THREE.MeshStandardMaterial({ color: 0x90D8FF, roughness: 0.03, metalness: 0.35, transparent: true, opacity: 0.6 });
+export var mKnob = new THREE.MeshStandardMaterial({ color: 0xF8D830, roughness: 0.12, metalness: 0.9 });
 export var mStem = new THREE.MeshStandardMaterial({ color: 0x3D8838, roughness: 0.8 });
 export var mFCenter = new THREE.MeshStandardMaterial({ color: 0xFFF8D0, roughness: 0.4, emissive: 0xFFF8D0, emissiveIntensity: 0.12 });
 export var mFlowers = [

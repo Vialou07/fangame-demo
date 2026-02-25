@@ -17,7 +17,7 @@ export function buildWorld(worldGroup) {
   // Ground plane
   var gnd = new THREE.Mesh(
     new THREE.PlaneGeometry(MAP_W + 12, MAP_H + 12),
-    new THREE.MeshStandardMaterial({ color: 0x4DA848, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({ color: 0x48A850, roughness: 0.9 })
   );
   gnd.rotation.x = -Math.PI / 2;
   gnd.position.set(MAP_W / 2 - 0.5, -0.08, MAP_H / 2 - 0.5);
