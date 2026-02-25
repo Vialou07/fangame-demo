@@ -1,0 +1,30 @@
+import * as THREE from 'three';
+import { TILE } from '../data/map.js';
+
+// ===================== MATERIALS =====================
+export var mGrass = new THREE.MeshStandardMaterial({ color: 0x5DB858, roughness: 0.9 });
+export var mGrassD = new THREE.MeshStandardMaterial({ color: 0x4DA848, roughness: 0.9 });
+export var mPath = new THREE.MeshStandardMaterial({ color: 0xD8C898, roughness: 0.95 });
+export var mWater = new THREE.MeshStandardMaterial({ color: 0x3A8AD8, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.82 });
+export var mTrunk = new THREE.MeshStandardMaterial({ color: 0x6B4830, roughness: 0.85 });
+export var mLeaf = new THREE.MeshStandardMaterial({ color: 0x2E8B40, roughness: 0.65 });
+export var mLeafL = new THREE.MeshStandardMaterial({ color: 0x48B848, roughness: 0.65 });
+export var mWall = new THREE.MeshStandardMaterial({ color: 0xF0E8D8, roughness: 0.7 });
+export var mRoof = new THREE.MeshStandardMaterial({ color: 0xC84848, roughness: 0.55 });
+export var mDoor = new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.75 });
+export var mDoorF = new THREE.MeshStandardMaterial({ color: 0x5A3820, roughness: 0.8 });
+export var mGlass = new THREE.MeshStandardMaterial({ color: 0x88CCFF, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.65 });
+export var mKnob = new THREE.MeshStandardMaterial({ color: 0xF0D030, roughness: 0.15, metalness: 0.85 });
+export var mStem = new THREE.MeshStandardMaterial({ color: 0x3D8838, roughness: 0.8 });
+export var mFCenter = new THREE.MeshStandardMaterial({ color: 0xFFF8D0, roughness: 0.4, emissive: 0xFFF8D0, emissiveIntensity: 0.12 });
+export var mFlowers = [
+  new THREE.MeshStandardMaterial({ color: 0xF06878, roughness: 0.5 }),
+  new THREE.MeshStandardMaterial({ color: 0xF8E040, roughness: 0.5 }),
+  new THREE.MeshStandardMaterial({ color: 0x78A8F0, roughness: 0.5 }),
+  new THREE.MeshStandardMaterial({ color: 0xFF88BB, roughness: 0.5 }),
+];
+export var mStone = new THREE.MeshStandardMaterial({ color: 0x999, roughness: 0.85 });
+
+// ===================== SHARED GEOS =====================
+export var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
+export var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);

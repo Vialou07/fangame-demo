@@ -8,37 +8,12 @@ import { createScene } from './engine/scene.js';
 import { createCamera, VIEW_SIZE, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
 import { setupLighting } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
+import { MAP_W, MAP_H, MOVE_SPEED, isBlocked } from './data/map.js';
+import { buildWorld } from './world/builder.js';
+import { createPlayer, PLAYER_COLORS } from './players/factory.js';
+import { remotePlayers, getOrCreateRemote, removeRemote } from './players/remote.js';
 
 document.getElementById('info').style.display = '';
-
-// ===================== CONSTANTS =====================
-var TILE = 1;
-var MAP_W = 14;
-var MAP_H = 12;
-var MOVE_SPEED = 3.2;
-
-var G = 0, P = 1, W = 2, T = 3, H = 4, R = 5, D = 6, F = 7;
-
-var MAP = [
-  [T,T,T,G,G,G,G,G,G,G,G,T,T,T],
-  [T,G,G,G,F,G,G,G,G,F,G,G,G,T],
-  [G,G,R,R,R,G,G,G,R,R,R,R,G,G],
-  [G,G,H,H,H,G,G,G,H,H,H,H,G,G],
-  [G,G,H,D,H,G,G,G,H,D,H,H,G,G],
-  [G,G,G,P,G,G,F,G,G,P,G,G,G,G],
-  [P,P,P,P,P,P,P,P,P,P,P,P,P,P],
-  [G,G,G,G,G,W,W,W,G,G,G,F,G,G],
-  [G,F,G,G,W,W,W,W,W,G,G,G,G,G],
-  [G,G,G,G,G,W,W,W,G,G,G,G,F,G],
-  [G,G,F,G,G,G,G,G,G,G,F,G,G,G],
-  [T,T,G,G,G,G,G,G,G,G,G,G,T,T],
-];
-
-function isBlocked(x, y) {
-  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return true;
-  var t = MAP[y][x];
-  return t === T || t === H || t === R || t === W;
-}
 
 // ===================== ENGINE SETUP =====================
 var renderer = createRenderer();
@@ -48,287 +23,15 @@ var aspect = window.innerWidth / window.innerHeight;
 setupLighting(scene, MAP_W, MAP_H);
 var keys = createInput();
 
-// ===================== MATERIALS =====================
-var mGrass = new THREE.MeshStandardMaterial({ color: 0x5DB858, roughness: 0.9 });
-var mGrassD = new THREE.MeshStandardMaterial({ color: 0x4DA848, roughness: 0.9 });
-var mPath = new THREE.MeshStandardMaterial({ color: 0xD8C898, roughness: 0.95 });
-var mWater = new THREE.MeshStandardMaterial({ color: 0x3A8AD8, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.82 });
-var mTrunk = new THREE.MeshStandardMaterial({ color: 0x6B4830, roughness: 0.85 });
-var mLeaf = new THREE.MeshStandardMaterial({ color: 0x2E8B40, roughness: 0.65 });
-var mLeafL = new THREE.MeshStandardMaterial({ color: 0x48B848, roughness: 0.65 });
-var mWall = new THREE.MeshStandardMaterial({ color: 0xF0E8D8, roughness: 0.7 });
-var mRoof = new THREE.MeshStandardMaterial({ color: 0xC84848, roughness: 0.55 });
-var mDoor = new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.75 });
-var mDoorF = new THREE.MeshStandardMaterial({ color: 0x5A3820, roughness: 0.8 });
-var mGlass = new THREE.MeshStandardMaterial({ color: 0x88CCFF, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.65 });
-var mKnob = new THREE.MeshStandardMaterial({ color: 0xF0D030, roughness: 0.15, metalness: 0.85 });
-var mStem = new THREE.MeshStandardMaterial({ color: 0x3D8838, roughness: 0.8 });
-var mFCenter = new THREE.MeshStandardMaterial({ color: 0xFFF8D0, roughness: 0.4, emissive: 0xFFF8D0, emissiveIntensity: 0.12 });
-var mFlowers = [
-  new THREE.MeshStandardMaterial({ color: 0xF06878, roughness: 0.5 }),
-  new THREE.MeshStandardMaterial({ color: 0xF8E040, roughness: 0.5 }),
-  new THREE.MeshStandardMaterial({ color: 0x78A8F0, roughness: 0.5 }),
-  new THREE.MeshStandardMaterial({ color: 0xFF88BB, roughness: 0.5 }),
-];
-var mStone = new THREE.MeshStandardMaterial({ color: 0x999, roughness: 0.85 });
-
-// ===================== SHARED GEOS =====================
-var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
-var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);
-
 // ===================== BUILD WORLD =====================
-var gnd = new THREE.Mesh(new THREE.PlaneGeometry(MAP_W + 12, MAP_H + 12), new THREE.MeshStandardMaterial({ color: 0x4DA848, roughness: 0.95 }));
-gnd.rotation.x = -Math.PI / 2;
-gnd.position.set(MAP_W / 2 - 0.5, -0.08, MAP_H / 2 - 0.5);
-gnd.receiveShadow = true;
-worldGroup.add(gnd);
+var { waterTiles } = buildWorld(worldGroup);
 
-var waterTiles = [];
-
-for (var y = 0; y < MAP_H; y++) {
-  for (var x = 0; x < MAP_W; x++) {
-    buildTile(x, y, MAP[y][x]);
-  }
-}
-
-function buildTile(x, y, type) {
-  switch (type) {
-    case G:
-      addBox(x, y, 0, tileGeo, (x + y) % 3 === 0 ? mGrassD : mGrass, true);
-      if (Math.random() > 0.4) addGrassBlades(x, y);
-      break;
-    case P:
-      addBox(x, y, -0.01, tileGeo, mPath, true);
-      if (Math.random() > 0.6) addPebble(x, y);
-      break;
-    case W:
-      addBox(x, y, -0.1, tileGeo, mGrassD, false);
-      var w = addBox(x, y, -0.03, waterGeo, mWater, true);
-      waterTiles.push(w);
-      break;
-    case T:
-      addBox(x, y, 0, tileGeo, mGrassD, true);
-      addTree(x, y);
-      break;
-    case H: addHouseWall(x, y); break;
-    case R: addHouseRoof(x, y); break;
-    case D: addDoor(x, y); break;
-    case F:
-      addBox(x, y, 0, tileGeo, mGrass, true);
-      addGrassBlades(x, y);
-      addFlowers(x, y);
-      break;
-  }
-}
-
-function addBox(x, z, yOff, geo, mat, shadow) {
-  var m = new THREE.Mesh(geo, mat);
-  m.position.set(x, yOff, z);
-  m.receiveShadow = shadow;
-  worldGroup.add(m);
-  return m;
-}
-
-function addGrassBlades(wx, wz) {
-  for (var i = 0; i < 3 + Math.floor(Math.random() * 4); i++) {
-    var blade = new THREE.Mesh(
-      new THREE.ConeGeometry(0.02, 0.13 + Math.random() * 0.12, 4),
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(0.3 + Math.random() * 0.05, 0.6, 0.32 + Math.random() * 0.15),
-        roughness: 0.8
-      })
-    );
-    blade.position.set(wx + (Math.random() - 0.5) * 0.8, 0.12, wz + (Math.random() - 0.5) * 0.8);
-    blade.rotation.x = (Math.random() - 0.5) * 0.3;
-    blade.rotation.z = (Math.random() - 0.5) * 0.3;
-    blade.castShadow = true;
-    worldGroup.add(blade);
-  }
-}
-
-function addPebble(wx, wz) {
-  var p = new THREE.Mesh(new THREE.SphereGeometry(0.04 + Math.random() * 0.04, 6, 4), mStone);
-  p.position.set(wx + (Math.random() - 0.5) * 0.5, 0.04, wz + (Math.random() - 0.5) * 0.5);
-  p.castShadow = true;
-  worldGroup.add(p);
-}
-
-function addTree(wx, wz) {
-  var g = new THREE.Group();
-  var tH = 0.8 + Math.random() * 0.3;
-  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, tH, 8), mTrunk);
-  trunk.position.y = tH / 2 + 0.06;
-  trunk.castShadow = true; trunk.receiveShadow = true;
-  g.add(trunk);
-
-  var base = tH + 0.1;
-  [[0, base + 0.3, 0, 0.45], [-0.15, base + 0.1, 0.1, 0.35], [0.15, base + 0.15, -0.1, 0.32], [0, base + 0.55, 0, 0.3], [-0.1, base + 0.2, -0.15, 0.28]].forEach(function(s) {
-    var leaf = new THREE.Mesh(new THREE.SphereGeometry(s[3], 8, 6), Math.random() > 0.4 ? mLeaf : mLeafL);
-    leaf.position.set(s[0], s[1], s[2]);
-    leaf.castShadow = true; leaf.receiveShadow = true;
-    g.add(leaf);
-  });
-
-  g.position.set(wx, 0, wz);
-  g.rotation.y = Math.random() * Math.PI * 2;
-  worldGroup.add(g);
-}
-
-function addHouseWall(wx, wz) {
-  addBox(wx, wz, 0, tileGeo, mGrass, true);
-  var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.9, TILE), mWall);
-  wall.position.set(wx, 0.51, wz);
-  wall.castShadow = true; wall.receiveShadow = true;
-  worldGroup.add(wall);
-
-  if (wz + 1 < MAP_H) {
-    var below = MAP[wz + 1][wx];
-    if (below !== H && below !== R && below !== D) {
-      var win = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), mGlass);
-      win.position.set(wx, 0.6, wz + 0.51);
-      worldGroup.add(win);
-      var fr = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.01), mDoorF);
-      fr.position.set(wx, 0.6, wz + 0.505);
-      worldGroup.add(fr);
-    }
-  }
-}
-
-function addHouseRoof(wx, wz) {
-  var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.9, TILE), mWall);
-  wall.position.set(wx, 0.51, wz);
-  wall.castShadow = true;
-  worldGroup.add(wall);
-  var roof = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.15, 0.15, TILE + 0.15), mRoof);
-  roof.position.set(wx, 1.02, wz);
-  roof.castShadow = true; roof.receiveShadow = true;
-  worldGroup.add(roof);
-  var peak = new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.1, 0.12, TILE - 0.1), mRoof);
-  peak.position.set(wx, 1.16, wz);
-  peak.castShadow = true;
-  worldGroup.add(peak);
-}
-
-function addDoor(wx, wz) {
-  addBox(wx, wz, -0.01, tileGeo, mPath, true);
-  var wl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, TILE), mWall);
-  wl.position.set(wx - 0.35, 0.51, wz); wl.castShadow = true; worldGroup.add(wl);
-  var wr = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, TILE), mWall);
-  wr.position.set(wx + 0.35, 0.51, wz); wr.castShadow = true; worldGroup.add(wr);
-  var wt = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, TILE), mWall);
-  wt.position.set(wx, 0.86, wz); worldGroup.add(wt);
-
-  var door = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.65, 0.06), mDoor);
-  door.position.set(wx, 0.42, wz + 0.48); door.castShadow = true; worldGroup.add(door);
-
-  [[wx - 0.2, 0.42, 0.04, 0.7], [wx + 0.2, 0.42, 0.04, 0.7]].forEach(function(p) {
-    var f = new THREE.Mesh(new THREE.BoxGeometry(p[2], p[3], 0.08), mDoorF);
-    f.position.set(p[0], p[1], wz + 0.48); worldGroup.add(f);
-  });
-  var ftop = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.08), mDoorF);
-  ftop.position.set(wx, 0.77, wz + 0.48); worldGroup.add(ftop);
-
-  var knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), mKnob);
-  knob.position.set(wx + 0.12, 0.45, wz + 0.52); worldGroup.add(knob);
-
-  var mat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.2), new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.95 }));
-  mat.position.set(wx, 0.07, wz + 0.55); mat.receiveShadow = true; worldGroup.add(mat);
-}
-
-function addFlowers(wx, wz) {
-  for (var i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
-    var fx = wx + (Math.random() - 0.5) * 0.7;
-    var fz = wz + (Math.random() - 0.5) * 0.7;
-    var fm = mFlowers[Math.floor(Math.random() * mFlowers.length)];
-    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.015, 0.2, 4), mStem);
-    stem.position.set(fx, 0.16, fz); worldGroup.add(stem);
-    for (var p = 0; p < 5; p++) {
-      var a = (p / 5) * Math.PI * 2;
-      var petal = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), fm);
-      petal.position.set(fx + Math.cos(a) * 0.06, 0.27, fz + Math.sin(a) * 0.06);
-      petal.castShadow = true;
-      worldGroup.add(petal);
-    }
-    var c = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), mFCenter);
-    c.position.set(fx, 0.28, fz); worldGroup.add(c);
-  }
-}
-
-// ===================== PLAYER FACTORY =====================
-function createPlayer(bodyColor, hatColor) {
-  var group = new THREE.Group();
-  var parts = [];
-  var baseYs = [];
-
-  var bMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.55 });
-  var b = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.25, 8, 12), bMat);
-  b.position.y = 0.32; b.castShadow = true; group.add(b);
-  parts.push(b); baseYs.push(0.32);
-
-  var hMat = new THREE.MeshStandardMaterial({ color: 0xF8C8A8, roughness: 0.65 });
-  var h = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), hMat);
-  h.position.y = 0.58; h.castShadow = true; group.add(h);
-  parts.push(h); baseYs.push(0.58);
-
-  var hrMat = new THREE.MeshStandardMaterial({ color: 0x383838, roughness: 0.8 });
-  var hr = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), hrMat);
-  hr.position.y = 0.61; hr.castShadow = true; group.add(hr);
-  parts.push(hr); baseYs.push(0.61);
-
-  var htMat = new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.45 });
-  var ht = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.08, 12), htMat);
-  ht.position.y = 0.7; ht.castShadow = true; group.add(ht);
-  parts.push(ht); baseYs.push(0.7);
-
-  var brim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 12), htMat);
-  brim.position.y = 0.67; group.add(brim);
-  parts.push(brim); baseYs.push(0.67);
-
-  var eMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3 });
-  var eL = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 4), eMat);
-  eL.position.set(-0.05, 0.59, 0.11); group.add(eL);
-  var eR = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 4), eMat);
-  eR.position.set(0.05, 0.59, 0.11); group.add(eR);
-
-  var shad = new THREE.Mesh(new THREE.CircleGeometry(0.2, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
-  shad.rotation.x = -Math.PI / 2; shad.position.y = 0.07; group.add(shad);
-
-  return { group: group, parts: parts, baseYs: baseYs };
-}
-
-var PLAYER_COLORS = [0xE04040, 0x4080E0, 0x40C040, 0xA040E0, 0xE08040, 0xE040A0, 0x40C0C0, 0xC0C040];
-
+// ===================== LOCAL PLAYER =====================
 var local = createPlayer(0xE04040, 0xE04040);
 var playerGroup = local.group;
 var playerX = 6, playerZ = 6;
 playerGroup.position.set(playerX, 0, playerZ);
 scene.add(playerGroup);
-
-// ===================== REMOTE PLAYERS =====================
-var remotePlayers = {};
-var nametagContainer = document.getElementById('nametags');
-
-function getOrCreateRemote(pid, colorIndex) {
-  if (!remotePlayers[pid]) {
-    var c = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
-    var p = createPlayer(c, c);
-    p.group.position.set(6, 0, 6);
-    scene.add(p.group);
-    var tag = document.createElement('div');
-    tag.className = 'nametag';
-    nametagContainer.appendChild(tag);
-    remotePlayers[pid] = { player: p, state: { x: 6, z: 6, ry: 0, m: false }, name: '', tag: tag };
-  }
-  return remotePlayers[pid];
-}
-
-function removeRemote(pid) {
-  if (remotePlayers[pid]) {
-    scene.remove(remotePlayers[pid].player.group);
-    if (remotePlayers[pid].tag) remotePlayers[pid].tag.remove();
-    delete remotePlayers[pid];
-  }
-}
 
 // ===================== LOCAL STATE =====================
 var localMoving = false;
@@ -486,7 +189,7 @@ function goOnline() {
   allPresence.on('child_added', function(snap) {
     if (snap.key === myUid) return;
     var d = snap.val();
-    var rp = getOrCreateRemote(snap.key, d.c);
+    var rp = getOrCreateRemote(scene, snap.key, d.c);
     rp.state.x = d.x; rp.state.z = d.z; rp.state.ry = d.ry; rp.state.m = d.m;
     rp.name = d.name || '???';
     if (rp.tag) rp.tag.textContent = rp.name;
@@ -508,7 +211,7 @@ function goOnline() {
 
   allPresence.on('child_removed', function(snap) {
     if (snap.key === myUid) return;
-    removeRemote(snap.key);
+    removeRemote(scene, snap.key);
     updateBadge();
   });
 
@@ -522,7 +225,7 @@ function goOffline() {
   if (presenceRef) { try { presenceRef.remove(); } catch (e) {} }
   db.ref('presence').off();
   db.ref('.info/connected').off();
-  for (var pid in remotePlayers) removeRemote(pid);
+  for (var pid in remotePlayers) removeRemote(scene, pid);
 }
 
 // Sync position (10Hz with delta check)
