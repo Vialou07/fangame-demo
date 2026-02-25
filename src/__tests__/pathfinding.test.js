@@ -10,8 +10,8 @@ describe('A* pathfinding', function() {
   });
 
   it('returns empty array when goal is blocked', function() {
-    // (42,2) is T (tree), blocked
-    var path = findPath(77, 60, 42, 2);
+    // (0,0) is T (tree), blocked
+    var path = findPath(77, 60, 0, 0);
     expect(path).toEqual([]);
   });
 
@@ -46,9 +46,9 @@ describe('A* pathfinding', function() {
     expect(path.length).toBeLessThanOrEqual(2);
   });
 
-  it('returns empty when no path exists (surrounded by walls)', function() {
-    // Goal is a house wall tile (73,56) = H, blocked
-    var path = findPath(77, 60, 73, 56);
+  it('returns empty when no path exists (goal is blocked)', function() {
+    // Goal is a house wall tile (84,56) = H, blocked
+    var path = findPath(77, 60, 84, 56);
     expect(path).toEqual([]);
   });
 

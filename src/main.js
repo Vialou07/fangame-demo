@@ -5,7 +5,7 @@ import { createScene } from './engine/scene.js';
 import { createCamera, zoom, updateCameraZoom, setupPinchZoom, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
 import { setupLighting, updateShadow } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
-import { MAP_W, MAP_H, MOVE_SPEED, isBlocked } from './data/map.js';
+import { MAP_W, MAP_H, MOVE_SPEED, SPRINT_MULT, isBlocked } from './data/map.js';
 import { initChunks, updateChunks, allWaterTiles, allLilyPads } from './engine/chunks.js';
 import { createPlayer, PLAYER_COLORS } from './players/factory.js';
 import { remotePlayers, getOrCreateRemote, removeRemote } from './players/remote.js';
@@ -14,6 +14,7 @@ import { syncPosition } from './network/sync.js';
 import { saveGame, setupAutoSave } from './network/save.js';
 import { showStatus, hideLobby, showLobby, hideBadge, updateBadge, setupLobbyHandlers } from './ui/lobby.js';
 import { findPath } from './engine/pathfinding.js';
+import { initMinimap, updateMinimap, isFullMapOpen } from './ui/minimap.js';
 
 // Show info text only on desktop
 var infoEl = document.getElementById('info');
@@ -70,6 +71,7 @@ function handleClickToMove(clientX, clientY) {
 
 // Mouse click (desktop)
 renderer.domElement.addEventListener('click', function(e) {
+  if (isFullMapOpen()) return;
   handleClickToMove(e.clientX, e.clientY);
 });
 
@@ -134,6 +136,38 @@ var state = {
   db: db,
   PLAYER_COLORS: PLAYER_COLORS
 };
+
+// ===================== TELEPORT + MINIMAP =====================
+var SAFE_SPAWN = { x: 80, z: 62 }; // Bourg-Aurore center
+
+function teleportTo(x, z) {
+  playerX = x + 0.5;
+  playerZ = z + 0.5;
+  state.playerX = playerX;
+  state.playerZ = playerZ;
+  playerGroup.position.set(playerX, 0, playerZ);
+  pathQueue = [];
+  pathMarker.visible = false;
+  updateChunks(playerX, playerZ, worldGroup);
+}
+
+// SOS button
+document.getElementById('sos-btn').addEventListener('click', function() {
+  teleportTo(SAFE_SPAWN.x, SAFE_SPAWN.z);
+});
+
+// Init minimap with teleport callback
+initMinimap(function(tileX, tileZ) {
+  teleportTo(tileX, tileZ);
+});
+
+// Open full map with M key
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'm' || e.key === 'M') {
+    // Don't trigger while typing in inputs
+    if (e.target.tagName === 'INPUT') return;
+  }
+});
 
 // ===================== AUTH =====================
 var targetAngle = 0;
@@ -276,10 +310,12 @@ function animate() {
 
   // --- Local movement ---
   var dx = 0, dz = 0;
-  if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
-  if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
-  if (keys['ArrowUp'] || keys['KeyW']) dz = -1;
-  if (keys['ArrowDown'] || keys['KeyS']) dz = 1;
+  if (!isFullMapOpen()) {
+    if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
+    if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
+    if (keys['ArrowUp'] || keys['KeyW']) dz = -1;
+    if (keys['ArrowDown'] || keys['KeyS']) dz = 1;
+  }
 
   var manualInput = dx !== 0 || dz !== 0;
 
@@ -308,13 +344,15 @@ function animate() {
   }
 
   var moving = dx !== 0 || dz !== 0;
+  var sprinting = moving && (keys['ShiftLeft'] || keys['ShiftRight']);
   state.localMoving = moving;
   if (moving) {
     var len = Math.sqrt(dx * dx + dz * dz);
     dx /= len; dz /= len;
 
-    var newX = playerX + dx * MOVE_SPEED * dt;
-    var newZ = playerZ + dz * MOVE_SPEED * dt;
+    var speed = sprinting ? MOVE_SPEED * SPRINT_MULT : MOVE_SPEED;
+    var newX = playerX + dx * speed * dt;
+    var newZ = playerZ + dz * speed * dt;
     var r = 0.22;
 
     var cx1 = Math.floor(newX - r + 0.5), cx2 = Math.floor(newX + r + 0.5);
@@ -331,8 +369,10 @@ function animate() {
 
     targetAngle = Math.atan2(dx, dz);
 
+    var bobFreq = sprinting ? 18 : 12;
+    var bobAmp = sprinting ? 0.024 : 0.018;
     for (var i = 0; i < local.parts.length; i++) {
-      local.parts[i].position.y = local.baseYs[i] + Math.sin(time * 12) * 0.018;
+      local.parts[i].position.y = local.baseYs[i] + Math.sin(time * bobFreq) * bobAmp;
     }
   } else {
     for (var i = 0; i < local.parts.length; i++) {
@@ -415,6 +455,9 @@ function animate() {
   camPosV.set(playerGroup.position.x + CAM_DX, CAM_DY, playerGroup.position.z + CAM_DZ);
   camera.position.lerp(camPosV, 5 * dt);
   camera.quaternion.copy(camQuat);
+
+  // Update minimap
+  updateMinimap(playerX, playerZ, remotePlayers);
 
   renderer.render(scene, camera);
 }

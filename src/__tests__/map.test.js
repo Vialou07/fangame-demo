@@ -57,18 +57,18 @@ describe('MAP content', function() {
   });
 
   it('map has all biome types (forest, town, lake, desert, mountain, volcano)', function() {
-    // Town: doors exist (Bourg-Aurore)
-    expect(MAP[56][74]).toBe(D);
+    // Town: doors exist (Bourg-Aurore player house)
+    expect(MAP[56][85]).toBe(D);
     // Lake: water
-    expect(MAP[110][70]).toBe(W);
+    expect(MAP[80][48]).toBe(W);
     // Desert: sand
     expect(MAP[60][182]).toBe(SD);
     // Mountain: rocks
-    expect(MAP[5][5]).toBe(RK);
+    expect(MAP[0][3]).toBe(RK);
     // Volcano: lava
-    expect(MAP[20][25]).toBe(LV);
+    expect(MAP[20][23]).toBe(LV);
     // Forest: trees
-    expect(MAP[2][42]).toBe(T);
+    expect(MAP[0][0]).toBe(T);
     // Tall grass encounter zones exist
     var hasTG = false;
     for (var y = 0; y < MAP_H && !hasTG; y++) {

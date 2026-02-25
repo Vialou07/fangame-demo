@@ -4,6 +4,7 @@ export var TILE = 1;
 export var MAP_W = 200;
 export var MAP_H = 200;
 export var MOVE_SPEED = 3.2;
+export var SPRINT_MULT = 1.8;
 
 export var G = 0, P = 1, W = 2, T = 3, H = 4, R = 5, D = 6, F = 7;
 export var S = 8, B = 9, L = 10, N = 11; // Sign, Bench, Lamp, Fence
