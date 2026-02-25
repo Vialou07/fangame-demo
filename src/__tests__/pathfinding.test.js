@@ -3,34 +3,33 @@ import { findPath } from '../engine/pathfinding.js';
 
 describe('A* pathfinding', function() {
   it('finds a path between open tiles', function() {
-    // (6,6) is path P, (6,5) is flower/grass area
-    var path = findPath(0, 5, 5, 5);
+    // (19,14) and (25,14) are both P tiles on the main street
+    var path = findPath(19, 14, 25, 14);
     expect(path.length).toBeGreaterThan(0);
-    // Last waypoint should be the goal
-    expect(path[path.length - 1]).toEqual({ x: 5, z: 5 });
+    expect(path[path.length - 1]).toEqual({ x: 25, z: 14 });
   });
 
   it('returns empty array when goal is blocked', function() {
     // (0,0) is T (tree), blocked
-    var path = findPath(6, 6, 0, 0);
+    var path = findPath(19, 14, 0, 0);
     expect(path).toEqual([]);
   });
 
   it('returns empty array when start equals goal', function() {
-    var path = findPath(6, 6, 6, 6);
+    var path = findPath(19, 14, 19, 14);
     expect(path).toEqual([]);
   });
 
   it('finds path along the main road', function() {
-    // Row 6 is all P (path tiles), but P is walkable
-    var path = findPath(0, 6, 13, 6);
+    // Row 14 has path tiles from x=14 to x=33
+    var path = findPath(14, 14, 33, 14);
     expect(path.length).toBeGreaterThan(0);
-    expect(path[path.length - 1]).toEqual({ x: 13, z: 6 });
+    expect(path[path.length - 1]).toEqual({ x: 33, z: 14 });
   });
 
   it('avoids blocked tiles', function() {
-    // Path from (3,5) P to (9,5) P, must go around houses
-    var path = findPath(3, 5, 9, 5);
+    // Path from town to east meadow, must go around houses
+    var path = findPath(19, 14, 33, 10);
     expect(path.length).toBeGreaterThan(0);
     for (var i = 0; i < path.length; i++) {
       var p = path[i];
@@ -40,16 +39,23 @@ describe('A* pathfinding', function() {
   });
 
   it('supports diagonal movement', function() {
-    // From (3,6) P to (5,5) G - open area, diagonal shortcut possible
-    var path = findPath(3, 6, 5, 5);
+    // (10,10) and (11,11) are both G, diagonal neighbors, all 4 cells in 2x2 are walkable
+    var path = findPath(10, 10, 11, 11);
     expect(path.length).toBeGreaterThan(0);
-    // Manhattan distance = 3, with diagonals it should be 2
-    expect(path.length).toBeLessThanOrEqual(3);
+    // Diagonal = 1 step
+    expect(path.length).toBeLessThanOrEqual(2);
   });
 
   it('returns empty when no path exists (surrounded by walls)', function() {
-    // Goal inside a house: (3,3) is H (house wall), blocked
-    var path = findPath(6, 6, 3, 3);
+    // Goal is a house wall tile (14,12) = H, blocked
+    var path = findPath(19, 14, 14, 12);
     expect(path).toEqual([]);
+  });
+
+  it('finds long path across the map', function() {
+    // From forest path (12,3) P to route 1 south (20,22) P
+    var path = findPath(12, 3, 20, 22);
+    expect(path.length).toBeGreaterThan(10);
+    expect(path[path.length - 1]).toEqual({ x: 20, z: 22 });
   });
 });

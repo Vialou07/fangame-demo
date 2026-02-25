@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F, S, B, L, N } from '../data/map.js';
+import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F, S, B, L, N, TG } from '../data/map.js';
 import {
   mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
   mPine, mPineD, mBush, mBushD,
@@ -89,6 +89,11 @@ function buildTile(worldGroup, x, y, type) {
       addGrassBlades(worldGroup, x, y);
       addFence(worldGroup, x, y);
       break;
+    case TG:
+      addBox(worldGroup, x, y, 0, tileGeo, mGrassD, true);
+      addGrassBlades(worldGroup, x, y);
+      addTallGrassPatch(worldGroup, x, y);
+      break;
   }
 }
 
@@ -148,6 +153,26 @@ function addTallGrass(worldGroup, wx, wz) {
     blade.position.set(wx + ox, h / 2 + 0.06, wz + oz);
     blade.rotation.x = (rng() - 0.5) * 0.2;
     blade.rotation.z = (rng() - 0.5) * 0.2;
+    worldGroup.add(blade);
+  }
+}
+
+// Tall grass patch tile (TG type) — dense, tall, dark green encounter grass
+function addTallGrassPatch(worldGroup, wx, wz) {
+  var rng = tileSeed(wx * 500 + 3, wz * 500 + 7);
+  var count = 8 + Math.floor(rng() * 5); // 8-12 dense blades
+  for (var i = 0; i < count; i++) {
+    var h = 0.3 + rng() * 0.2;
+    var blade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.03, h, 4),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(0.26 + rng() * 0.04, 0.7 + rng() * 0.1, 0.2 + rng() * 0.08),
+        roughness: 0.7
+      })
+    );
+    blade.position.set(wx + (rng() - 0.5) * 0.8, h / 2 + 0.06, wz + (rng() - 0.5) * 0.8);
+    blade.rotation.x = (rng() - 0.5) * 0.3;
+    blade.rotation.z = (rng() - 0.5) * 0.3;
     worldGroup.add(blade);
   }
 }

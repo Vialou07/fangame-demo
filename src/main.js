@@ -110,7 +110,7 @@ renderer.domElement.addEventListener('touchend', function(e) {
 // ===================== LOCAL PLAYER =====================
 var local = createPlayer(0xE04040, 0xE04040);
 var playerGroup = local.group;
-var playerX = 6, playerZ = 6;
+var playerX = 20, playerZ = 15;
 playerGroup.position.set(playerX, 0, playerZ);
 scene.add(playerGroup);
 
@@ -175,7 +175,7 @@ async function logout() {
   try { await auth.signOut(); } catch (e) {}
   showLobby();
   hideBadge();
-  playerX = 6; playerZ = 6;
+  playerX = 20; playerZ = 15;
   state.playerX = playerX;
   state.playerZ = playerZ;
   playerGroup.position.set(playerX, 0, playerZ);
