@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { createRenderer } from './engine/renderer.js';
 import { createScene } from './engine/scene.js';
-import { createCamera, VIEW_SIZE, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
+import { createCamera, zoom, updateCameraZoom, setupPinchZoom, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
 import { setupLighting } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
 import { MAP_W, MAP_H, MOVE_SPEED, isBlocked } from './data/map.js';
@@ -16,7 +16,10 @@ import { showStatus, hideLobby, showLobby, hideBadge, updateBadge, setupLobbyHan
 import { loadModel } from './world/modelLoader.js';
 import { findPath } from './engine/pathfinding.js';
 
-document.getElementById('info').style.display = '';
+// Show info text only on desktop
+var infoEl = document.getElementById('info');
+if (window.innerWidth > 768) infoEl.style.display = '';
+else infoEl.remove();
 
 // ===================== ENGINE SETUP =====================
 var renderer = createRenderer();
@@ -25,6 +28,7 @@ var camera = createCamera();
 var aspect = window.innerWidth / window.innerHeight;
 setupLighting(scene, MAP_W, MAP_H);
 var keys = createInput();
+setupPinchZoom(renderer.domElement);
 
 // ===================== BUILD WORLD =====================
 var { waterTiles, lilyPads } = buildWorld(worldGroup);
@@ -95,15 +99,40 @@ renderer.domElement.addEventListener('click', function(e) {
   handleClickToMove(e.clientX, e.clientY);
 });
 
-// Tap (mobile) - on areas outside the joystick
-renderer.domElement.addEventListener('touchend', function(e) {
-  if (e.changedTouches.length > 0) {
-    var t = e.changedTouches[0];
-    // Ignore taps on the joystick area (bottom-left)
-    if (t.clientX < 180 && t.clientY > window.innerHeight - 180) return;
-    handleClickToMove(t.clientX, t.clientY);
+// Tap (mobile) - track touch to distinguish tap from pinch/drag
+var touchState = { startX: 0, startY: 0, startTime: 0, wasPinch: false };
+
+renderer.domElement.addEventListener('touchstart', function(e) {
+  if (e.touches.length >= 2) {
+    touchState.wasPinch = true;
+    return;
   }
-});
+  touchState.wasPinch = false;
+  touchState.startX = e.touches[0].clientX;
+  touchState.startY = e.touches[0].clientY;
+  touchState.startTime = Date.now();
+}, { passive: true });
+
+renderer.domElement.addEventListener('touchend', function(e) {
+  if (touchState.wasPinch || e.touches.length > 0) {
+    // Was a pinch or fingers still down — don't trigger
+    if (e.touches.length === 0) touchState.wasPinch = false;
+    return;
+  }
+  var t = e.changedTouches[0];
+  var dx = t.clientX - touchState.startX;
+  var dy = t.clientY - touchState.startY;
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  var elapsed = Date.now() - touchState.startTime;
+
+  // Only trigger on quick, stationary tap (< 300ms, < 15px movement)
+  if (elapsed > 300 || dist > 15) return;
+
+  // Ignore taps on the joystick area (bottom-left)
+  if (t.clientX < 180 && t.clientY > window.innerHeight - 180) return;
+
+  handleClickToMove(t.clientX, t.clientY);
+}, { passive: true });
 
 // ===================== LOCAL PLAYER =====================
 var local = createPlayer(0xE04040, 0xE04040);
@@ -253,12 +282,7 @@ setupAutoSave(state, goOffline);
 
 // ===================== RESIZE =====================
 window.addEventListener('resize', function() {
-  aspect = window.innerWidth / window.innerHeight;
-  camera.left = -VIEW_SIZE * aspect;
-  camera.right = VIEW_SIZE * aspect;
-  camera.top = VIEW_SIZE;
-  camera.bottom = -VIEW_SIZE;
-  camera.updateProjectionMatrix();
+  updateCameraZoom(camera);
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -404,6 +428,9 @@ function animate() {
   for (var j = 0; j < lilyPads.length; j++) {
     lilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
   }
+
+  // Update camera zoom (for pinch/wheel changes)
+  updateCameraZoom(camera);
 
   camPosV.set(playerGroup.position.x + CAM_DX, CAM_DY, playerGroup.position.z + CAM_DZ);
   camera.position.lerp(camPosV, 5 * dt);
