@@ -6,7 +6,7 @@ import { createCamera, zoom, updateCameraZoom, setupPinchZoom, CAM_DX, CAM_DY, C
 import { setupLighting, updateShadow } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
 import { MAP_W, MAP_H, MOVE_SPEED, isBlocked } from './data/map.js';
-import { buildWorld } from './world/builder.js';
+import { initChunks, updateChunks, allWaterTiles, allLilyPads } from './engine/chunks.js';
 import { createPlayer, PLAYER_COLORS } from './players/factory.js';
 import { remotePlayers, getOrCreateRemote, removeRemote } from './players/remote.js';
 import { initFirebase } from './network/firebase.js';
@@ -29,8 +29,9 @@ var { sun } = setupLighting(scene);
 var keys = createInput();
 setupPinchZoom(renderer.domElement);
 
-// ===================== BUILD WORLD =====================
-var { waterTiles, lilyPads } = buildWorld(worldGroup);
+// ===================== CHUNK SYSTEM =====================
+initChunks(worldGroup);
+updateChunks(20, 15, worldGroup); // Initial load around spawn
 
 // ===================== CLICK-TO-MOVE =====================
 var raycaster = new THREE.Raycaster();
@@ -395,11 +396,14 @@ function animate() {
 
   syncPosition(time, state);
 
-  for (var i = 0; i < waterTiles.length; i++) {
-    waterTiles[i].position.y = -0.03 + Math.sin(time * 1.5 + i * 0.7) * 0.015;
+  // Update chunks around player
+  updateChunks(playerX, playerZ, worldGroup);
+
+  for (var i = 0; i < allWaterTiles.length; i++) {
+    allWaterTiles[i].position.y = -0.03 + Math.sin(time * 1.5 + i * 0.7) * 0.015;
   }
-  for (var j = 0; j < lilyPads.length; j++) {
-    lilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
+  for (var j = 0; j < allLilyPads.length; j++) {
+    allLilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
   }
 
   // Update shadow camera to follow player

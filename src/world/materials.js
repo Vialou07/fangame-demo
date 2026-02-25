@@ -57,3 +57,11 @@ export var mLilyFlower = new THREE.MeshStandardMaterial({ color: 0xF0A0B8, rough
 // ===================== SHARED GEOS =====================
 export var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
 export var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);
+
+// Instanced geometries (shared across all chunks)
+export var bladeGeo = new THREE.ConeGeometry(0.018, 0.15, 4);
+export var tallBladeGeo = new THREE.ConeGeometry(0.03, 0.35, 4);
+export var pebbleGeo = new THREE.SphereGeometry(0.05, 6, 4);
+export var petalGeo = new THREE.SphereGeometry(0.03, 5, 3);
+export var stemGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.12, 4);
+export var centerGeo = new THREE.SphereGeometry(0.02, 5, 3);
