@@ -1,5 +1,77 @@
 import { MAP_W, MAP_H, isBlocked } from '../data/map.js';
 
+// Binary min-heap for A* open set — O(log n) insert/extract vs O(n) linear scan
+function MinHeap() {
+  this.data = [];
+  this.index = {}; // key -> position in heap (for decrease-key)
+}
+
+MinHeap.prototype.push = function(node) {
+  this.data.push(node);
+  var i = this.data.length - 1;
+  this.index[node.k] = i;
+  this._bubbleUp(i);
+};
+
+MinHeap.prototype.pop = function() {
+  var top = this.data[0];
+  var last = this.data.pop();
+  delete this.index[top.k];
+  if (this.data.length > 0) {
+    this.data[0] = last;
+    this.index[last.k] = 0;
+    this._sinkDown(0);
+  }
+  return top;
+};
+
+MinHeap.prototype.size = function() {
+  return this.data.length;
+};
+
+MinHeap.prototype.has = function(k) {
+  return this.index[k] !== undefined;
+};
+
+MinHeap.prototype.decreaseKey = function(k, newF) {
+  var i = this.index[k];
+  this.data[i].f = newF;
+  this._bubbleUp(i);
+};
+
+MinHeap.prototype._bubbleUp = function(i) {
+  while (i > 0) {
+    var parent = (i - 1) >> 1;
+    if (this.data[i].f < this.data[parent].f) {
+      this._swap(i, parent);
+      i = parent;
+    } else break;
+  }
+};
+
+MinHeap.prototype._sinkDown = function(i) {
+  var len = this.data.length;
+  while (true) {
+    var left = 2 * i + 1;
+    var right = 2 * i + 2;
+    var smallest = i;
+    if (left < len && this.data[left].f < this.data[smallest].f) smallest = left;
+    if (right < len && this.data[right].f < this.data[smallest].f) smallest = right;
+    if (smallest !== i) {
+      this._swap(i, smallest);
+      i = smallest;
+    } else break;
+  }
+};
+
+MinHeap.prototype._swap = function(a, b) {
+  var tmp = this.data[a];
+  this.data[a] = this.data[b];
+  this.data[b] = tmp;
+  this.index[this.data[a].k] = a;
+  this.index[this.data[b].k] = b;
+};
+
 // A* pathfinding on the tile grid
 // Returns array of {x, z} tile centers, or empty array if no path found
 
@@ -31,24 +103,18 @@ export function findPath(startX, startZ, goalX, goalZ) {
 
   var key = function(x, z) { return x + ',' + z; };
 
-  // Open set as simple sorted array (map is small, 14x12)
-  var open = [];
+  var open = new MinHeap();
   var gScore = {};
   var cameFrom = {};
   var closed = {};
 
   var startKey = key(sx, sz);
   gScore[startKey] = 0;
-  open.push({ x: sx, z: sz, f: heuristic(sx, sz, gx, gz) });
+  open.push({ x: sx, z: sz, f: heuristic(sx, sz, gx, gz), k: startKey });
 
-  while (open.length > 0) {
-    // Pick lowest f
-    var bestIdx = 0;
-    for (var i = 1; i < open.length; i++) {
-      if (open[i].f < open[bestIdx].f) bestIdx = i;
-    }
-    var current = open.splice(bestIdx, 1)[0];
-    var ck = key(current.x, current.z);
+  while (open.size() > 0) {
+    var current = open.pop();
+    var ck = current.k;
 
     if (current.x === gx && current.z === gz) {
       return reconstructPath(cameFrom, current.x, current.z, sx, sz);
@@ -78,17 +144,11 @@ export function findPath(startX, startZ, goalX, goalZ) {
       gScore[nk] = tentG;
       cameFrom[nk] = ck;
 
-      // Add or update in open
-      var found = false;
-      for (var j = 0; j < open.length; j++) {
-        if (open[j].x === nx && open[j].z === nz) {
-          open[j].f = tentG + heuristic(nx, nz, gx, gz);
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        open.push({ x: nx, z: nz, f: tentG + heuristic(nx, nz, gx, gz) });
+      var newF = tentG + heuristic(nx, nz, gx, gz);
+      if (open.has(nk)) {
+        open.decreaseKey(nk, newF);
+      } else {
+        open.push({ x: nx, z: nz, f: newF, k: nk });
       }
     }
   }

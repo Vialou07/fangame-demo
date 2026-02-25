@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createRenderer } from './engine/renderer.js';
 import { createScene } from './engine/scene.js';
 import { createCamera, zoom, updateCameraZoom, setupPinchZoom, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
-import { setupLighting } from './engine/lighting.js';
+import { setupLighting, updateShadow } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
 import { MAP_W, MAP_H, MOVE_SPEED, isBlocked } from './data/map.js';
 import { buildWorld } from './world/builder.js';
@@ -25,7 +25,7 @@ var renderer = createRenderer();
 var { scene, worldGroup } = createScene();
 var camera = createCamera();
 var aspect = window.innerWidth / window.innerHeight;
-setupLighting(scene, MAP_W, MAP_H);
+var { sun } = setupLighting(scene);
 var keys = createInput();
 setupPinchZoom(renderer.domElement);
 
@@ -401,6 +401,9 @@ function animate() {
   for (var j = 0; j < lilyPads.length; j++) {
     lilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
   }
+
+  // Update shadow camera to follow player
+  updateShadow(sun, playerX, playerZ);
 
   // Update camera zoom (for pinch/wheel changes)
   updateCameraZoom(camera);

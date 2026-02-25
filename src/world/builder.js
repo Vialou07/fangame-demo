@@ -126,7 +126,6 @@ function addGrassBlades(worldGroup, wx, wz) {
     blade.position.set(wx + (rng() - 0.5) * 0.85, h / 2 + 0.06, wz + (rng() - 0.5) * 0.85);
     blade.rotation.x = (rng() - 0.5) * 0.35;
     blade.rotation.z = (rng() - 0.5) * 0.35;
-    blade.castShadow = true;
     worldGroup.add(blade);
   }
 }
@@ -149,7 +148,6 @@ function addTallGrass(worldGroup, wx, wz) {
     blade.position.set(wx + ox, h / 2 + 0.06, wz + oz);
     blade.rotation.x = (rng() - 0.5) * 0.2;
     blade.rotation.z = (rng() - 0.5) * 0.2;
-    blade.castShadow = true;
     worldGroup.add(blade);
   }
 }
@@ -157,7 +155,6 @@ function addTallGrass(worldGroup, wx, wz) {
 function addPebble(worldGroup, wx, wz) {
   var p = new THREE.Mesh(new THREE.SphereGeometry(0.04 + Math.random() * 0.04, 6, 4), mStone);
   p.position.set(wx + (Math.random() - 0.5) * 0.5, 0.04, wz + (Math.random() - 0.5) * 0.5);
-  p.castShadow = true;
   worldGroup.add(p);
 }
 
@@ -468,7 +465,6 @@ function addWaterDecor(worldGroup, wx, wz) {
       );
       reed.rotation.x = (rng() - 0.5) * 0.15;
       reed.rotation.z = (rng() - 0.5) * 0.15;
-      reed.castShadow = true;
       worldGroup.add(reed);
     }
   }
@@ -620,7 +616,6 @@ function addFlowers(worldGroup, wx, wz) {
       var a = (p / 5) * Math.PI * 2;
       var petal = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), fm);
       petal.position.set(fx + Math.cos(a) * 0.06, 0.27, fz + Math.sin(a) * 0.06);
-      petal.castShadow = true;
       worldGroup.add(petal);
     }
     var c = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), mFCenter);
