@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isBlocked, MAP_W, MAP_H, G, P, T, W, H, R } from '../data/map.js';
+import { isBlocked, MAP_W, MAP_H, G, P, T, W, H, R, S, B, L, N } from '../data/map.js';
 
 describe('isBlocked', () => {
   it('positions hors limites sont bloquees', () => {
@@ -52,5 +52,23 @@ describe('isBlocked', () => {
   it('les fleurs (F) ne sont pas bloquees', () => {
     expect(isBlocked(4, 1)).toBe(false);
     expect(isBlocked(6, 5)).toBe(false);
+  });
+
+  it('les panneaux (S) sont bloques', () => {
+    expect(isBlocked(1, 5)).toBe(true);
+  });
+
+  it('les bancs (B) sont bloques', () => {
+    expect(isBlocked(9, 7)).toBe(true);
+  });
+
+  it('les lampadaires (L) sont bloques', () => {
+    expect(isBlocked(12, 5)).toBe(true);
+    expect(isBlocked(3, 7)).toBe(true);
+  });
+
+  it('les clotures (N) sont bloquees', () => {
+    expect(isBlocked(0, 10)).toBe(true);
+    expect(isBlocked(13, 10)).toBe(true);
   });
 });

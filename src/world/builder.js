@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F } from '../data/map.js';
+import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F, S, B, L, N } from '../data/map.js';
 import {
   mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
   mPine, mPineD, mBush, mBushD,
   mWall, mRoof, mDoor, mDoorF, mGlass, mKnob, mStem, mFCenter, mFlowers, mStone,
   mFoundation, mShutter, mChimney, mAwning, mStep,
+  mSign, mSignPost, mBench, mBenchLeg, mLamp, mLampLight, mFenceWood,
   tileGeo, waterGeo
 } from './materials.js';
 
@@ -63,6 +64,25 @@ function buildTile(worldGroup, x, y, type) {
       addBox(worldGroup, x, y, 0, tileGeo, mGrass, true);
       addGrassBlades(worldGroup, x, y);
       addFlowers(worldGroup, x, y);
+      break;
+    case S:
+      addBox(worldGroup, x, y, 0, tileGeo, mGrass, true);
+      addGrassBlades(worldGroup, x, y);
+      addSign(worldGroup, x, y);
+      break;
+    case B:
+      addBox(worldGroup, x, y, 0, tileGeo, mGrass, true);
+      addGrassBlades(worldGroup, x, y);
+      addBenchProp(worldGroup, x, y);
+      break;
+    case L:
+      addBox(worldGroup, x, y, 0, tileGeo, mGrass, true);
+      addLampPost(worldGroup, x, y);
+      break;
+    case N:
+      addBox(worldGroup, x, y, 0, tileGeo, mGrass, true);
+      addGrassBlades(worldGroup, x, y);
+      addFence(worldGroup, x, y);
       break;
   }
 }
@@ -384,6 +404,119 @@ function addDoor(worldGroup, wx, wz) {
   // Door mat
   var mat = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.02, 0.15), new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.95 }));
   mat.position.set(wx, 0.1, wz + 0.55); mat.receiveShadow = true; worldGroup.add(mat);
+}
+
+// Sign — wooden post + panel
+function addSign(worldGroup, wx, wz) {
+  var g = new THREE.Group();
+  // Post
+  var post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.6, 6), mSignPost);
+  post.position.y = 0.36;
+  post.castShadow = true;
+  g.add(post);
+  // Panel
+  var panel = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.04), mSign);
+  panel.position.y = 0.6;
+  panel.castShadow = true; panel.receiveShadow = true;
+  g.add(panel);
+  // Panel frame (darker edge)
+  var frame = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.29, 0.02), mSignPost);
+  frame.position.y = 0.6;
+  frame.position.z = -0.015;
+  g.add(frame);
+  g.position.set(wx, 0, wz);
+  worldGroup.add(g);
+}
+
+// Bench — two legs + planks
+function addBenchProp(worldGroup, wx, wz) {
+  var g = new THREE.Group();
+  // Left leg
+  var legL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.3), mBenchLeg);
+  legL.position.set(-0.25, 0.21, 0);
+  legL.castShadow = true;
+  g.add(legL);
+  // Right leg
+  var legR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.3), mBenchLeg);
+  legR.position.set(0.25, 0.21, 0);
+  legR.castShadow = true;
+  g.add(legR);
+  // Seat (3 planks)
+  for (var i = -1; i <= 1; i++) {
+    var plank = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.03, 0.1), mBench);
+    plank.position.set(0, 0.36, i * 0.1);
+    plank.castShadow = true; plank.receiveShadow = true;
+    g.add(plank);
+  }
+  // Backrest
+  var back = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.03), mBench);
+  back.position.set(0, 0.5, -0.15);
+  back.castShadow = true;
+  g.add(back);
+  g.position.set(wx, 0, wz);
+  worldGroup.add(g);
+}
+
+// Lamp post — pole + lantern
+function addLampPost(worldGroup, wx, wz) {
+  var g = new THREE.Group();
+  // Pole
+  var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 1.2, 8), mLamp);
+  pole.position.y = 0.66;
+  pole.castShadow = true;
+  g.add(pole);
+  // Pole base
+  var base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.08, 8), mLamp);
+  base.position.y = 0.1;
+  g.add(base);
+  // Lantern housing
+  var housing = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), mLamp);
+  housing.position.y = 1.28;
+  housing.castShadow = true;
+  g.add(housing);
+  // Lantern top
+  var top = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.08, 4), mLamp);
+  top.position.y = 1.38;
+  top.rotation.y = Math.PI / 4;
+  g.add(top);
+  // Light globe (emissive)
+  var globe = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mLampLight);
+  globe.position.y = 1.22;
+  g.add(globe);
+  g.position.set(wx, 0, wz);
+  worldGroup.add(g);
+}
+
+// Fence — 2 posts + 2 horizontal bars
+function addFence(worldGroup, wx, wz) {
+  var g = new THREE.Group();
+  // Left post
+  var pL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), mFenceWood);
+  pL.position.set(-0.35, 0.31, 0);
+  pL.castShadow = true;
+  g.add(pL);
+  // Right post
+  var pR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), mFenceWood);
+  pR.position.set(0.35, 0.31, 0);
+  pR.castShadow = true;
+  g.add(pR);
+  // Top bar
+  var barT = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.04), mFenceWood);
+  barT.position.y = 0.48;
+  barT.castShadow = true;
+  g.add(barT);
+  // Bottom bar
+  var barB = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.04), mFenceWood);
+  barB.position.y = 0.25;
+  barB.castShadow = true;
+  g.add(barB);
+  // Middle picket
+  var mid = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.04), mFenceWood);
+  mid.position.set(0, 0.29, 0);
+  mid.castShadow = true;
+  g.add(mid);
+  g.position.set(wx, 0, wz);
+  worldGroup.add(g);
 }
 
 function addFlowers(worldGroup, wx, wz) {

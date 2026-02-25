@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAP, MAP_W, MAP_H, TILE, MOVE_SPEED, G, P, W, T, H, R, D, F } from '../data/map.js';
+import { MAP, MAP_W, MAP_H, TILE, MOVE_SPEED, G, P, W, T, H, R, D, F, S, B, L, N } from '../data/map.js';
 
 describe('map constants', () => {
   it('MAP dimensions match declared size', () => {
@@ -18,7 +18,7 @@ describe('map constants', () => {
   });
 
   it('tile type constants are distinct integers', () => {
-    var types = [G, P, W, T, H, R, D, F];
+    var types = [G, P, W, T, H, R, D, F, S, B, L, N];
     var unique = new Set(types);
     expect(unique.size).toBe(types.length);
   });
@@ -26,7 +26,7 @@ describe('map constants', () => {
 
 describe('MAP content', () => {
   it('all tiles are valid types', () => {
-    var valid = new Set([G, P, W, T, H, R, D, F]);
+    var valid = new Set([G, P, W, T, H, R, D, F, S, B, L, N]);
     for (var y = 0; y < MAP_H; y++) {
       for (var x = 0; x < MAP_W; x++) {
         expect(valid.has(MAP[y][x])).toBe(true);

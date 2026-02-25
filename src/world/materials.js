@@ -39,6 +39,15 @@ export var mChimney = new THREE.MeshStandardMaterial({ color: 0x8B4444, roughnes
 export var mAwning = new THREE.MeshStandardMaterial({ color: 0x7B3B2A, roughness: 0.65 });
 export var mStep = new THREE.MeshStandardMaterial({ color: 0xC8B898, roughness: 0.85 });
 
+// Props
+export var mSign = new THREE.MeshStandardMaterial({ color: 0xC8A868, roughness: 0.8 });
+export var mSignPost = new THREE.MeshStandardMaterial({ color: 0x6B4830, roughness: 0.85 });
+export var mBench = new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.75 });
+export var mBenchLeg = new THREE.MeshStandardMaterial({ color: 0x4A4A4A, roughness: 0.7, metalness: 0.3 });
+export var mLamp = new THREE.MeshStandardMaterial({ color: 0x3A3A3A, roughness: 0.5, metalness: 0.5 });
+export var mLampLight = new THREE.MeshStandardMaterial({ color: 0xFFF8D0, roughness: 0.2, emissive: 0xFFF0A0, emissiveIntensity: 0.5 });
+export var mFenceWood = new THREE.MeshStandardMaterial({ color: 0x9B7848, roughness: 0.8 });
+
 // ===================== SHARED GEOS =====================
 export var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
 export var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);
