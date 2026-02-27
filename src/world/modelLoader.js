@@ -18,8 +18,10 @@ export function loadModel(path) {
   }
 
   return promise.then(function(buffer) {
+    // Resolve base path for external resources (textures, etc.)
+    var basePath = path.substring(0, path.lastIndexOf('/') + 1);
     return new Promise(function(resolve, reject) {
-      loader.parse(buffer, '', function(gltf) {
+      loader.parse(buffer, basePath, function(gltf) {
         gltf.scene.traverse(function(child) {
           if (child.isMesh) {
             child.castShadow = true;

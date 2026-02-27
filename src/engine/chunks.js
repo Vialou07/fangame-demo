@@ -2,14 +2,16 @@ import * as THREE from 'three';
 import { MAP_W, MAP_H } from '../data/map.js';
 import { buildChunk } from '../world/builder.js';
 import {
-  tileGeo, waterGeo, bladeGeo,
+  tileGeo, waterGeo, waterPlaneGeo, bladeGeo,
   mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
   mPine, mPineD, mBush, mBushD, mWall, mRoof, mDoor, mDoorF,
   mGlass, mKnob, mStem, mFCenter, mStone, mFoundation, mShutter,
   mChimney, mAwning, mStep, mSign, mSignPost, mBench, mBenchLeg,
   mLamp, mLampLight, mFenceWood, mSand, mReed, mLilyPad, mLilyFlower,
-  mFlowers, mSandTile, mRock, mRockD, mLava
+  mFlowers, mSandTile, mRock, mRockD, mLava,
+  grassMats, pathMats
 } from '../world/materials.js';
+import { waterShaderMat, lavaShaderMat } from '../world/shaders.js';
 
 export var CHUNK_SIZE = 16;
 export var LOAD_RADIUS = 2; // Load chunks within this radius of the player's chunk
@@ -117,15 +119,23 @@ var sharedMats = null;
 
 function getSharedSets() {
   if (!sharedGeos) {
-    sharedGeos = new Set([tileGeo, waterGeo, bladeGeo]);
-    sharedMats = new Set([
+    sharedGeos = new Set([tileGeo, waterGeo, waterPlaneGeo, bladeGeo]);
+    var matArr = [
       mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
       mPine, mPineD, mBush, mBushD, mWall, mRoof, mDoor, mDoorF,
       mGlass, mKnob, mStem, mFCenter, mStone, mFoundation, mShutter,
       mChimney, mAwning, mStep, mSign, mSignPost, mBench, mBenchLeg,
       mLamp, mLampLight, mFenceWood, mSand, mReed, mLilyPad, mLilyFlower,
       mSandTile, mRock, mRockD, mLava
-    ]);
+    ];
+    // Add grass/path variants and flower materials
+    for (var i = 0; i < grassMats.length; i++) matArr.push(grassMats[i]);
+    for (var j = 0; j < pathMats.length; j++) matArr.push(pathMats[j]);
+    for (var k = 0; k < mFlowers.length; k++) matArr.push(mFlowers[k]);
+    // Add shader materials
+    if (waterShaderMat) matArr.push(waterShaderMat);
+    if (lavaShaderMat) matArr.push(lavaShaderMat);
+    sharedMats = new Set(matArr);
   }
   return { geos: sharedGeos, mats: sharedMats };
 }
@@ -144,6 +154,11 @@ function unloadChunk(key, worldGroup) {
         child.geometry.dispose();
       }
       if (child.material && !shared.mats.has(child.material)) {
+        // Dispose textures on GLTF materials
+        if (child.material.map) child.material.map.dispose();
+        if (child.material.normalMap) child.material.normalMap.dispose();
+        if (child.material.roughnessMap) child.material.roughnessMap.dispose();
+        if (child.material.metalnessMap) child.material.metalnessMap.dispose();
         child.material.dispose();
       }
     }

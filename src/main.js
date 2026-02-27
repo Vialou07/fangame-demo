@@ -5,7 +5,7 @@ import { createScene } from './engine/scene.js';
 import { createCamera, zoom, updateCameraZoom, setupPinchZoom, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
 import { setupLighting, updateShadow } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
-import { MAP_W, MAP_H, MOVE_SPEED, SPRINT_MULT, isBlocked } from './data/map.js';
+import { MAP_W, MAP_H, MOVE_SPEED, SPRINT_MULT, isBlocked, BIOME_MAP } from './data/map.js';
 import { initChunks, updateChunks, allWaterTiles, allLilyPads } from './engine/chunks.js';
 import { createPlayer, PLAYER_COLORS } from './players/factory.js';
 import { remotePlayers, getOrCreateRemote, removeRemote } from './players/remote.js';
@@ -16,6 +16,12 @@ import { showStatus, hideLobby, showLobby, hideBadge, updateBadge, setupLobbyHan
 import { findPath } from './engine/pathfinding.js';
 import { initMinimap, updateMinimap, isFullMapOpen } from './ui/minimap.js';
 import { initZoneHUD, updateZoneHUD } from './ui/zonehud.js';
+import { preloadAllModels } from './world/modelRegistry.js';
+import { initHeightMap, getHeightSmooth } from './world/heightMap.js';
+import { initParticles, updateParticles } from './world/particles.js';
+import { BIOME } from './data/biomes.js';
+import { initShaderMaterials, shaderTime } from './world/shaders.js';
+import { zoneTheme } from './ui/zonehud.js';
 
 // Show info text only on desktop
 var infoEl = document.getElementById('info');
@@ -31,9 +37,14 @@ var { sun } = setupLighting(scene);
 var keys = createInput();
 setupPinchZoom(renderer.domElement);
 
-// ===================== CHUNK SYSTEM =====================
+// ===================== SHADERS + HEIGHT MAP + CHUNKS =====================
+initShaderMaterials();
+initHeightMap();
 initChunks(worldGroup);
 updateChunks(80, 62, worldGroup); // Initial load around Bourg-Aurore spawn
+
+// ===================== PARTICLES =====================
+initParticles(scene);
 
 // ===================== CLICK-TO-MOVE =====================
 var raycaster = new THREE.Raycaster();
@@ -142,11 +153,28 @@ var state = {
 var SAFE_SPAWN = { x: 80, z: 62 }; // Bourg-Aurore center
 
 function teleportTo(x, z) {
+  // Find nearest unblocked tile if target is blocked
+  if (isBlocked(x, z)) {
+    var found = false;
+    for (var r = 1; r < 10 && !found; r++) {
+      for (var dz = -r; dz <= r && !found; dz++) {
+        for (var dx = -r; dx <= r && !found; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+          if (!isBlocked(x + dx, z + dz)) {
+            x = x + dx;
+            z = z + dz;
+            found = true;
+          }
+        }
+      }
+    }
+  }
   playerX = x + 0.5;
   playerZ = z + 0.5;
   state.playerX = playerX;
   state.playerZ = playerZ;
-  playerGroup.position.set(playerX, 0, playerZ);
+  var py = getHeightSmooth(playerX, playerZ);
+  playerGroup.position.set(playerX, py, playerZ);
   pathQueue = [];
   pathMarker.visible = false;
   updateChunks(playerX, playerZ, worldGroup);
@@ -194,7 +222,7 @@ async function enterWorld(uid, displayName, colorIndex) {
       playerZ = gameState.position.z;
       state.playerX = playerX;
       state.playerZ = playerZ;
-      playerGroup.position.set(playerX, 0, playerZ);
+      playerGroup.position.set(playerX, getHeightSmooth(playerX, playerZ), playerZ);
       if (gameState.position.ry !== undefined) {
         playerGroup.rotation.y = gameState.position.ry;
         targetAngle = gameState.position.ry;
@@ -217,7 +245,7 @@ async function logout() {
   playerX = 80; playerZ = 62;
   state.playerX = playerX;
   state.playerZ = playerZ;
-  playerGroup.position.set(playerX, 0, playerZ);
+  playerGroup.position.set(playerX, getHeightSmooth(playerX, playerZ), playerZ);
   showStatus('', false);
 }
 
@@ -412,7 +440,9 @@ function animate() {
   state.playerX = playerX;
   state.playerZ = playerZ;
 
+  var targetY = getHeightSmooth(playerX, playerZ);
   playerGroup.position.x += (playerX - playerGroup.position.x) * 10 * dt;
+  playerGroup.position.y += (targetY - playerGroup.position.y) * 8 * dt;
   playerGroup.position.z += (playerZ - playerGroup.position.z) * 10 * dt;
 
   var angleDiff = targetAngle - playerGroup.rotation.y;
@@ -490,7 +520,7 @@ function animate() {
   // Update camera zoom (for pinch/wheel changes)
   updateCameraZoom(camera);
 
-  camPosV.set(playerGroup.position.x + CAM_DX, CAM_DY, playerGroup.position.z + CAM_DZ);
+  camPosV.set(playerGroup.position.x + CAM_DX, CAM_DY + playerGroup.position.y, playerGroup.position.z + CAM_DZ);
   camera.position.lerp(camPosV, 5 * dt);
   camera.quaternion.copy(camQuat);
 
@@ -498,7 +528,29 @@ function animate() {
   updateMinimap(playerX, playerZ, remotePlayers);
   updateZoneHUD(playerX, playerZ);
 
+  // Leaf/dust particles
+  updateParticles(dt, playerX, playerZ);
+
+  // Update shader time uniform (drives water + lava animation)
+  shaderTime.value = time;
+
+  // Zone-based visual theme transitions (fog color, density, sky color)
+  if (scene.fog) {
+    scene.fog.density += (zoneTheme.fogDensity - scene.fog.density) * 2 * dt;
+    var targetFogCol = new THREE.Color(zoneTheme.fogColor);
+    scene.fog.color.lerp(targetFogCol, 2 * dt);
+    var targetSkyCol = new THREE.Color(zoneTheme.skyColor);
+    scene.background.lerp(targetSkyCol, 2 * dt);
+  }
+
   renderer.render(scene, camera);
 }
 
-animate();
+// Preload 3D models, then start the game loop
+preloadAllModels().then(function() {
+  console.log('Models preloaded');
+  animate();
+}).catch(function() {
+  console.warn('Model preload failed, starting with fallback geometry');
+  animate();
+});

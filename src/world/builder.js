@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { TILE, MAP_W, MAP_H, MAP, BLDG_TYPE, G, P, W, T, H, R, D, F, S, B, L, N, TG, SD, RK, LV } from '../data/map.js';
+import { TILE, MAP_W, MAP_H, MAP, BLDG_TYPE, BIOME_MAP, G, P, W, T, H, R, D, F, S, B, L, N, TG, SD, RK, LV } from '../data/map.js';
+import { BIOME } from '../data/biomes.js';
 import {
   mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
   mPine, mPineD, mBush, mBushD,
@@ -9,9 +10,14 @@ import {
   mSign, mSignPost, mBench, mBenchLeg, mLamp, mLampLight, mFenceWood,
   mSand, mReed, mLilyPad, mLilyFlower,
   mSandTile, mRock, mRockD, mLava,
+  grassMats, pathMats,
   bladeGeo,
-  tileGeo, waterGeo
+  tileGeo, waterGeo, waterPlaneGeo
 } from './materials.js';
+import { getHeight } from './heightMap.js';
+import { detectBuildings } from './buildingDetector.js';
+import { getBuildingConfig, getModelForBuilding } from './modelRegistry.js';
+import { waterShaderMat, lavaShaderMat } from './shaders.js';
 
 // Building type → roof material
 function getRoofMat(wx, wz) {
@@ -71,8 +77,38 @@ export function buildChunk(startX, startZ, width, height) {
   var endX = Math.min(startX + width, MAP_W);
   var endZ = Math.min(startZ + height, MAP_H);
 
+  // Detect buildings in this chunk region and determine which tiles are model-covered
+  var buildings = detectBuildings(startX, startZ, width, height);
+  var modelCoveredTiles = {};
+
+  for (var b = 0; b < buildings.length; b++) {
+    var bldg = buildings[b];
+    var config = getBuildingConfig(bldg.type);
+    if (!config) continue; // No model → fallback to box geometry
+
+    // Mark all tiles of this building as model-covered
+    for (var bz = bldg.minZ; bz <= bldg.maxZ; bz++) {
+      for (var bx = bldg.minX; bx <= bldg.maxX; bx++) {
+        modelCoveredTiles[bx + ',' + bz] = true;
+      }
+    }
+
+    // Only place model if the anchor (door) is within THIS chunk
+    if (bldg.anchorX >= startX && bldg.anchorX < startX + width &&
+        bldg.anchorZ >= startZ && bldg.anchorZ < startZ + height) {
+      placeModelBuilding(group, bldg, config);
+    }
+  }
+
   for (var y = startZ; y < endZ; y++) {
     for (var x = startX; x < endX; x++) {
+      if (modelCoveredTiles[x + ',' + y]) {
+        // Place grass + path under model footprint
+        var tile = MAP[y][x];
+        addBox(group, x, y, 0, tileGeo, tile === D || tile === P ? mPath : mGrass, true);
+        collectGrassBlades(x, y);
+        continue;
+      }
       buildTile(group, x, y, MAP[y][x]);
     }
   }
@@ -84,30 +120,86 @@ export function buildChunk(startX, startZ, width, height) {
   return result;
 }
 
+// Place a GLTF model for a detected building
+function placeModelBuilding(group, bldg, config) {
+  var centerX = (bldg.minX + bldg.maxX) / 2;
+  var centerZ = (bldg.minZ + bldg.maxZ) / 2;
+  var h = getHeight(Math.round(centerX), Math.round(centerZ));
+  var seedVal = (bldg.anchorX * 73856093) ^ (bldg.anchorZ * 19349669);
+  var rng = tileSeed(bldg.anchorX * 500 + 17, bldg.anchorZ * 500 + 31);
+
+  getModelForBuilding(bldg.type, seedVal).then(function(model) {
+    if (!model) return;
+    // Scale with slight variation (±10%)
+    var scaleVar = config.scale * (0.92 + rng() * 0.16);
+    model.scale.setScalar(scaleVar);
+    model.position.set(centerX, h + config.yOffset, centerZ);
+    // Face south with slight rotation variation
+    model.rotation.y = Math.PI + (rng() - 0.5) * 0.12;
+
+    // Tint materials for visual variety per building
+    model.traverse(function(child) {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone();
+        child.material.color.offsetHSL(
+          (rng() - 0.5) * 0.05,  // subtle hue shift
+          (rng() - 0.5) * 0.08,  // saturation variation
+          (rng() - 0.5) * 0.06   // lightness variation
+        );
+      }
+    });
+
+    group.add(model);
+  });
+}
+
 // ===================== TILE BUILDER =====================
 
+// Quick integer hash for tile-based randomness
+function tileHash(x, z) {
+  return ((x * 73856093) ^ (z * 19349669)) & 0x7fffffff;
+}
+
+function getGrassMat(x, z) {
+  return grassMats[tileHash(x * 3 + 1, z * 7 + 3) % grassMats.length];
+}
+
+function getPathMat(x, z) {
+  return pathMats[tileHash(x * 11 + 5, z * 17 + 7) % pathMats.length];
+}
+
+// Small Y jitter to break the perfectly flat grid look
+function grassJitter(x, z) {
+  return ((tileHash(x * 23, z * 41) % 30) - 15) * 0.001;
+}
+
+function getBiomeAt(x, z) {
+  if (x < 0 || z < 0 || x >= MAP_W || z >= MAP_H) return -1;
+  return BIOME_MAP[z][x];
+}
+
 function buildTile(group, x, y, type) {
+  var biome = getBiomeAt(x, y);
   switch (type) {
     case G:
-      addBox(group, x, y, 0, tileGeo, (x + y) % 3 === 0 ? mGrassD : mGrass, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       collectGrassBlades(x, y);
       if ((x * 7 + y * 13) % 4 === 0) collectTallGrass(x, y);
       break;
     case P: {
-      addBox(group, x, y, -0.01, tileGeo, mPath, true);
+      addBox(group, x, y, -0.01 + grassJitter(x, y), tileGeo, getPathMat(x, y), true);
       var rng = tileSeed(x * 131 + 1, y * 137 + 1);
       if (rng() > 0.6) addPebble(group, x, y);
       break;
     }
     case W:
       addBox(group, x, y, -0.1, tileGeo, mGrassD, false);
-      var w = addBox(group, x, y, -0.03, waterGeo, mWater, true);
-      _ctx.waterTiles.push(w);
+      addWaterShader(group, x, y);
       addWaterEdge(group, x, y);
       addWaterDecor(group, x, y);
       break;
     case T: {
-      addBox(group, x, y, 0, tileGeo, mGrassD, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       var treeType = pickTreeType(x, y);
       if (treeType === 0) addTreeRound(group, x, y);
       else if (treeType === 1) addTreePine(group, x, y);
@@ -118,45 +210,49 @@ function buildTile(group, x, y, type) {
     case R: addHouseRoof(group, x, y); break;
     case D: addDoor(group, x, y); break;
     case F:
-      addBox(group, x, y, 0, tileGeo, mGrass, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       collectGrassBlades(x, y);
       addFlowers(group, x, y);
       break;
     case S:
-      addBox(group, x, y, 0, tileGeo, mGrass, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       collectGrassBlades(x, y);
       addSign(group, x, y);
       break;
     case B:
-      addBox(group, x, y, 0, tileGeo, mGrass, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       collectGrassBlades(x, y);
       addBenchProp(group, x, y);
       break;
     case L:
-      addBox(group, x, y, 0, tileGeo, mGrass, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       addLampPost(group, x, y);
       break;
     case N:
-      addBox(group, x, y, 0, tileGeo, mGrass, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       collectGrassBlades(x, y);
       addFence(group, x, y);
       break;
     case TG:
-      addBox(group, x, y, 0, tileGeo, mGrassD, true);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
       collectGrassBlades(x, y);
       collectTallGrassPatch(x, y);
       break;
     case SD:
-      addBox(group, x, y, -0.01, tileGeo, mSandTile, true);
+      addBox(group, x, y, -0.01 + grassJitter(x, y), tileGeo, mSandTile, true);
       addSandDetail(group, x, y);
       break;
     case RK:
-      addBox(group, x, y, 0, tileGeo, mGrassD, true);
-      addRockProp(group, x, y);
+      addBox(group, x, y, grassJitter(x, y), tileGeo, getGrassMat(x, y), true);
+      if (biome === BIOME.MOUNTAIN || biome === BIOME.CAVE_ENTRANCE) {
+        addMountainRock(group, x, y, biome);
+      } else {
+        addRockProp(group, x, y);
+      }
       break;
     case LV:
       addBox(group, x, y, -0.05, tileGeo, mGrassD, false);
-      addLavaTile(group, x, y);
+      addLavaShader(group, x, y);
       break;
   }
 }
@@ -165,7 +261,7 @@ function buildTile(group, x, y, type) {
 
 function addBox(group, x, z, yOff, geo, mat, shadow) {
   var m = new THREE.Mesh(geo, mat);
-  m.position.set(x, yOff, z);
+  m.position.set(x, yOff + getHeight(x, z), z);
   m.receiveShadow = shadow;
   group.add(m);
   return m;
@@ -189,12 +285,13 @@ function tileSeed(x, z) {
 function collectGrassBlades(wx, wz) {
   var rng = tileSeed(wx * 100, wz * 100);
   var count = 5 + Math.floor(rng() * 6);
+  var tileH = getHeight(wx, wz);
   for (var i = 0; i < count; i++) {
     var h = 0.1 + rng() * 0.18;
     _col.setHSL(0.3 + rng() * 0.06, 0.55 + rng() * 0.15, 0.28 + rng() * 0.18);
     _ctx.blades.push({
       x: wx + (rng() - 0.5) * 0.85,
-      y: 0.06 + h / 2,
+      y: tileH + 0.06 + h / 2,
       z: wz + (rng() - 0.5) * 0.85,
       rx: (rng() - 0.5) * 0.35,
       rz: (rng() - 0.5) * 0.35,
@@ -208,12 +305,13 @@ function collectTallGrass(wx, wz) {
   var rng = tileSeed(wx * 200 + 7, wz * 200 + 13);
   var count = 3 + Math.floor(rng() * 3);
   var rf = 0.025 / 0.018; // radius factor vs bladeGeo
+  var tileH = getHeight(wx, wz);
   for (var i = 0; i < count; i++) {
     var h = 0.25 + rng() * 0.15;
     _col.setHSL(0.28 + rng() * 0.04, 0.65, 0.25 + rng() * 0.1);
     _ctx.blades.push({
       x: wx + (rng() - 0.5) * 0.4,
-      y: 0.06 + h / 2,
+      y: tileH + 0.06 + h / 2,
       z: wz + (rng() - 0.5) * 0.4,
       rx: (rng() - 0.5) * 0.2,
       rz: (rng() - 0.5) * 0.2,
@@ -227,12 +325,13 @@ function collectTallGrassPatch(wx, wz) {
   var rng = tileSeed(wx * 500 + 3, wz * 500 + 7);
   var count = 8 + Math.floor(rng() * 5);
   var rf = 0.03 / 0.018; // radius factor vs bladeGeo
+  var tileH = getHeight(wx, wz);
   for (var i = 0; i < count; i++) {
     var h = 0.3 + rng() * 0.2;
     _col.setHSL(0.26 + rng() * 0.04, 0.7 + rng() * 0.1, 0.2 + rng() * 0.08);
     _ctx.blades.push({
       x: wx + (rng() - 0.5) * 0.8,
-      y: 0.06 + h / 2,
+      y: tileH + 0.06 + h / 2,
       z: wz + (rng() - 0.5) * 0.8,
       rx: (rng() - 0.5) * 0.3,
       rz: (rng() - 0.5) * 0.3,
@@ -271,7 +370,7 @@ function flushInstances(group) {
 function addPebble(group, wx, wz) {
   var rng = tileSeed(wx * 131, wz * 137);
   var p = new THREE.Mesh(new THREE.SphereGeometry(0.04 + rng() * 0.04, 6, 4), mStone);
-  p.position.set(wx + (rng() - 0.5) * 0.5, 0.04, wz + (rng() - 0.5) * 0.5);
+  p.position.set(wx + (rng() - 0.5) * 0.5, getHeight(wx, wz) + 0.04, wz + (rng() - 0.5) * 0.5);
   group.add(p);
 }
 
@@ -319,7 +418,7 @@ function addTreeRound(group, wx, wz) {
     g.add(leaf);
   }
 
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   g.rotation.y = rng() * Math.PI * 2;
   group.add(g);
 }
@@ -349,7 +448,7 @@ function addTreePine(group, wx, wz) {
     g.add(cone);
   }
 
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
 }
 
@@ -385,22 +484,23 @@ function addBush(group, wx, wz) {
     g.add(lump);
   }
 
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
 }
 
 // ===================== HOUSES =====================
 
 function addHouseWall(group, wx, wz) {
+  var hY = getHeight(wx, wz);
   addBox(group, wx, wz, 0, tileGeo, mGrass, true);
 
   var found = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.12, TILE), mFoundation);
-  found.position.set(wx, 0.12, wz);
+  found.position.set(wx, hY + 0.12, wz);
   found.castShadow = true; found.receiveShadow = true;
   group.add(found);
 
   var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.78, TILE), mWall);
-  wall.position.set(wx, 0.57, wz);
+  wall.position.set(wx, hY + 0.57, wz);
   wall.castShadow = true; wall.receiveShadow = true;
   group.add(wall);
 
@@ -408,17 +508,17 @@ function addHouseWall(group, wx, wz) {
     var below = MAP[wz + 1][wx];
     if (below !== H && below !== R && below !== D) {
       var win = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.02), mGlass);
-      win.position.set(wx, 0.6, wz + 0.51);
+      win.position.set(wx, hY + 0.6, wz + 0.51);
       group.add(win);
       var fr = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.01), mDoorF);
-      fr.position.set(wx, 0.6, wz + 0.505);
+      fr.position.set(wx, hY + 0.6, wz + 0.505);
       group.add(fr);
       var sL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.02), mShutter);
-      sL.position.set(wx - 0.22, 0.6, wz + 0.515);
+      sL.position.set(wx - 0.22, hY + 0.6, wz + 0.515);
       sL.rotation.y = 0.15;
       group.add(sL);
       var sR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.02), mShutter);
-      sR.position.set(wx + 0.22, 0.6, wz + 0.515);
+      sR.position.set(wx + 0.22, hY + 0.6, wz + 0.515);
       sR.rotation.y = -0.15;
       group.add(sR);
     }
@@ -427,79 +527,82 @@ function addHouseWall(group, wx, wz) {
 
 function addHouseRoof(group, wx, wz) {
   var rm = getRoofMat(wx, wz);
+  var hY = getHeight(wx, wz);
 
   var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.9, TILE), mWall);
-  wall.position.set(wx, 0.51, wz);
+  wall.position.set(wx, hY + 0.51, wz);
   wall.castShadow = true;
   group.add(wall);
 
   var roof = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.2, 0.12, TILE + 0.2), rm);
-  roof.position.set(wx, 1.0, wz);
+  roof.position.set(wx, hY + 1.0, wz);
   roof.castShadow = true; roof.receiveShadow = true;
   group.add(roof);
 
   var mid = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.05, 0.1, TILE + 0.05), rm);
-  mid.position.set(wx, 1.12, wz);
+  mid.position.set(wx, hY + 1.12, wz);
   mid.castShadow = true;
   group.add(mid);
 
   var peak = new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.15, 0.1, TILE - 0.15), rm);
-  peak.position.set(wx, 1.22, wz);
+  peak.position.set(wx, hY + 1.22, wz);
   peak.castShadow = true;
   group.add(peak);
 
   if ((wx * 5 + wz * 11) % 3 === 0) {
     var chimney = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), mChimney);
-    chimney.position.set(wx + 0.2, 1.4, wz - 0.15);
+    chimney.position.set(wx + 0.2, hY + 1.4, wz - 0.15);
     chimney.castShadow = true;
     group.add(chimney);
     var rim = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.2), mChimney);
-    rim.position.set(wx + 0.2, 1.55, wz - 0.15);
+    rim.position.set(wx + 0.2, hY + 1.55, wz - 0.15);
     group.add(rim);
   }
 }
 
 function addDoor(group, wx, wz) {
+  var hY = getHeight(wx, wz);
   addBox(group, wx, wz, -0.01, tileGeo, mPath, true);
 
   var fL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, TILE), mFoundation);
-  fL.position.set(wx - 0.35, 0.12, wz); group.add(fL);
+  fL.position.set(wx - 0.35, hY + 0.12, wz); group.add(fL);
   var fR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, TILE), mFoundation);
-  fR.position.set(wx + 0.35, 0.12, wz); group.add(fR);
+  fR.position.set(wx + 0.35, hY + 0.12, wz); group.add(fR);
 
   var wl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.78, TILE), mWall);
-  wl.position.set(wx - 0.35, 0.57, wz); wl.castShadow = true; group.add(wl);
+  wl.position.set(wx - 0.35, hY + 0.57, wz); wl.castShadow = true; group.add(wl);
   var wr = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.78, TILE), mWall);
-  wr.position.set(wx + 0.35, 0.57, wz); wr.castShadow = true; group.add(wr);
+  wr.position.set(wx + 0.35, hY + 0.57, wz); wr.castShadow = true; group.add(wr);
   var wt = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, TILE), mWall);
-  wt.position.set(wx, 0.87, wz); group.add(wt);
+  wt.position.set(wx, hY + 0.87, wz); group.add(wt);
 
   var door = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.65, 0.06), mDoor);
-  door.position.set(wx, 0.45, wz + 0.48); door.castShadow = true; group.add(door);
+  door.position.set(wx, hY + 0.45, wz + 0.48); door.castShadow = true; group.add(door);
 
+  var doorHY = hY;
   [[wx - 0.2, 0.45, 0.04, 0.7], [wx + 0.2, 0.45, 0.04, 0.7]].forEach(function(p) {
     var f = new THREE.Mesh(new THREE.BoxGeometry(p[2], p[3], 0.08), mDoorF);
-    f.position.set(p[0], p[1], wz + 0.48); group.add(f);
+    f.position.set(p[0], doorHY + p[1], wz + 0.48); group.add(f);
   });
   var ftop = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.08), mDoorF);
-  ftop.position.set(wx, 0.8, wz + 0.48); group.add(ftop);
+  ftop.position.set(wx, hY + 0.8, wz + 0.48); group.add(ftop);
 
   var knob = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), mKnob);
-  knob.position.set(wx + 0.12, 0.48, wz + 0.52); group.add(knob);
+  knob.position.set(wx + 0.12, hY + 0.48, wz + 0.52); group.add(knob);
 
   var awning = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.04, 0.25), mAwning);
-  awning.position.set(wx, 0.88, wz + 0.55);
+  awning.position.set(wx, hY + 0.88, wz + 0.55);
   awning.rotation.x = 0.15;
   awning.castShadow = true;
   group.add(awning);
 
   var step1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.15), mStep);
-  step1.position.set(wx, 0.09, wz + 0.6); step1.receiveShadow = true; group.add(step1);
+  step1.position.set(wx, hY + 0.09, wz + 0.6); step1.receiveShadow = true; group.add(step1);
   var step2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 0.18), mStep);
-  step2.position.set(wx, 0.03, wz + 0.75); step2.receiveShadow = true; group.add(step2);
+  step2.position.set(wx, hY + 0.03, wz + 0.75); step2.receiveShadow = true; group.add(step2);
 
   var mat = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.02, 0.15), new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.95 }));
-  mat.position.set(wx, 0.1, wz + 0.55); mat.receiveShadow = true; group.add(mat);
+  mat.position.set(wx, hY + 0.1, wz + 0.55); mat.receiveShadow = true; group.add(mat);
 }
 
 // ===================== WATER =====================
@@ -525,7 +628,7 @@ function addWaterEdge(group, wx, wz) {
       var pz = wz + d.oz + (d.dx !== 0 ? spread : (rng() - 0.5) * 0.2);
       var r = 0.03 + rng() * 0.04;
       var pebble = new THREE.Mesh(new THREE.SphereGeometry(r, 5, 4), mSand);
-      pebble.position.set(px, -0.01, pz);
+      pebble.position.set(px, getHeight(wx, wz) - 0.01, pz);
       pebble.scale.y = 0.5;
       group.add(pebble);
     }
@@ -551,7 +654,7 @@ function addWaterDecor(group, wx, wz) {
       var reed = new THREE.Mesh(new THREE.ConeGeometry(0.015, h, 4), mReed);
       reed.position.set(
         wx + (rng() - 0.5) * 0.6,
-        h / 2,
+        getHeight(wx, wz) + h / 2,
         wz + (rng() - 0.5) * 0.6
       );
       reed.rotation.x = (rng() - 0.5) * 0.15;
@@ -568,13 +671,13 @@ function addWaterDecor(group, wx, wz) {
       mLilyPad
     );
     pad.rotation.x = -Math.PI / 2;
-    pad.position.set(padX, -0.01, padZ);
+    pad.position.set(padX, getHeight(wx, wz) - 0.01, padZ);
     group.add(pad);
     _ctx.lilyPads.push(pad);
 
     if (rng() > 0.5) {
       var flower = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), mLilyFlower);
-      flower.position.set(padX, 0.02, padZ);
+      flower.position.set(padX, getHeight(wx, wz) + 0.02, padZ);
       group.add(flower);
       _ctx.lilyPads.push(flower);
     }
@@ -597,7 +700,7 @@ function addSign(group, wx, wz) {
   frame.position.y = 0.6;
   frame.position.z = -0.015;
   g.add(frame);
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
 }
 
@@ -621,7 +724,7 @@ function addBenchProp(group, wx, wz) {
   back.position.set(0, 0.5, -0.15);
   back.castShadow = true;
   g.add(back);
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
 }
 
@@ -645,7 +748,7 @@ function addLampPost(group, wx, wz) {
   var globe = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mLampLight);
   globe.position.y = 1.22;
   g.add(globe);
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
 }
 
@@ -671,27 +774,28 @@ function addFence(group, wx, wz) {
   mid.position.set(0, 0.29, 0);
   mid.castShadow = true;
   g.add(mid);
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
 }
 
 function addFlowers(group, wx, wz) {
   var rng = tileSeed(wx * 900 + 9, wz * 900 + 11);
+  var hY = getHeight(wx, wz);
   var count = 2 + Math.floor(rng() * 3);
   for (var i = 0; i < count; i++) {
     var fx = wx + (rng() - 0.5) * 0.7;
     var fz = wz + (rng() - 0.5) * 0.7;
     var fm = mFlowers[Math.floor(rng() * mFlowers.length)];
     var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.015, 0.2, 4), mStem);
-    stem.position.set(fx, 0.16, fz); group.add(stem);
+    stem.position.set(fx, hY + 0.16, fz); group.add(stem);
     for (var p = 0; p < 5; p++) {
       var a = (p / 5) * Math.PI * 2;
       var petal = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), fm);
-      petal.position.set(fx + Math.cos(a) * 0.06, 0.27, fz + Math.sin(a) * 0.06);
+      petal.position.set(fx + Math.cos(a) * 0.06, hY + 0.27, fz + Math.sin(a) * 0.06);
       group.add(petal);
     }
     var c = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 4), mFCenter);
-    c.position.set(fx, 0.28, fz); group.add(c);
+    c.position.set(fx, hY + 0.28, fz); group.add(c);
   }
 }
 
@@ -699,10 +803,9 @@ function addFlowers(group, wx, wz) {
 
 function addSandDetail(group, wx, wz) {
   var rng = tileSeed(wx * 1100 + 11, wz * 1100 + 13);
-  // Occasional small pebbles on sand
   if (rng() > 0.7) {
     var p = new THREE.Mesh(new THREE.SphereGeometry(0.03 + rng() * 0.03, 5, 3), mSand);
-    p.position.set(wx + (rng() - 0.5) * 0.5, 0.02, wz + (rng() - 0.5) * 0.5);
+    p.position.set(wx + (rng() - 0.5) * 0.5, getHeight(wx, wz) + 0.02, wz + (rng() - 0.5) * 0.5);
     p.scale.y = 0.5;
     group.add(p);
   }
@@ -730,13 +833,169 @@ function addRockProp(group, wx, wz) {
     small.castShadow = true;
     g.add(small);
   }
-  g.position.set(wx, 0, wz);
+  g.position.set(wx, getHeight(wx, wz), wz);
   g.rotation.y = rng() * Math.PI * 2;
   group.add(g);
 }
 
 function addLavaTile(group, wx, wz) {
   var lava = new THREE.Mesh(waterGeo, mLava);
-  lava.position.set(wx, -0.01, wz);
+  lava.position.set(wx, getHeight(wx, wz) - 0.01, wz);
   group.add(lava);
+}
+
+// ===================== SHADER WATER/LAVA =====================
+
+function addWaterShader(group, wx, wz) {
+  var mat = waterShaderMat || mWater;
+  var geo = waterShaderMat ? waterPlaneGeo : waterGeo;
+  var w = new THREE.Mesh(geo, mat);
+  w.position.set(wx, getHeight(wx, wz) - 0.02, wz);
+  group.add(w);
+  _ctx.waterTiles.push(w);
+}
+
+function addLavaShader(group, wx, wz) {
+  var mat = lavaShaderMat || mLava;
+  var geo = lavaShaderMat ? waterPlaneGeo : waterGeo;
+  var lv = new THREE.Mesh(geo, mat);
+  lv.position.set(wx, getHeight(wx, wz) - 0.01, wz);
+  group.add(lv);
+}
+
+// ===================== DRAMATIC MOUNTAINS & CAVES =====================
+
+var mMountainRock = new THREE.MeshStandardMaterial({ color: 0x6A6A72, roughness: 0.92 });
+var mMountainRockD = new THREE.MeshStandardMaterial({ color: 0x4A4A52, roughness: 0.88 });
+var mCaveDark = new THREE.MeshStandardMaterial({ color: 0x1A1A28, roughness: 0.95 });
+var mCaveFrame = new THREE.MeshStandardMaterial({ color: 0x4A4A58, roughness: 0.9 });
+
+function addMountainRock(group, wx, wz, biome) {
+  var rng = tileSeed(wx * 1300 + 17, wz * 1300 + 19);
+  var g = new THREE.Group();
+  var hY = getHeight(wx, wz);
+
+  if (biome === BIOME.CAVE_ENTRANCE && rng() > 0.7) {
+    // Cave entrance formation
+    addCaveMouth(g, rng);
+  } else {
+    // Tall mountain rock pillar
+    var height = 0.8 + rng() * 1.5;
+    var baseR = 0.3 + rng() * 0.2;
+    var mat1 = rng() > 0.5 ? mMountainRock : mMountainRockD;
+
+    // Main pillar (tapers toward top)
+    var pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(baseR * 0.5, baseR, height, 7, 1),
+      mat1
+    );
+    pillar.position.y = height / 2 + 0.06;
+    pillar.castShadow = true; pillar.receiveShadow = true;
+    g.add(pillar);
+
+    // Irregular top cap
+    var cap = new THREE.Mesh(
+      new THREE.SphereGeometry(baseR * 0.6, 6, 4),
+      mMountainRockD
+    );
+    cap.scale.y = 0.4;
+    cap.position.y = height + 0.06;
+    cap.castShadow = true;
+    g.add(cap);
+
+    // Extra boulders at base
+    var extras = 1 + Math.floor(rng() * 2);
+    for (var i = 0; i < extras; i++) {
+      var er = 0.15 + rng() * 0.15;
+      var ea = rng() * Math.PI * 2;
+      var boulder = new THREE.Mesh(
+        new THREE.SphereGeometry(er, 6, 4),
+        rng() > 0.5 ? mMountainRock : mRockD
+      );
+      boulder.scale.y = 0.5 + rng() * 0.3;
+      boulder.position.set(Math.cos(ea) * 0.3, er * 0.35 + 0.06, Math.sin(ea) * 0.3);
+      boulder.castShadow = true;
+      g.add(boulder);
+    }
+
+    // Snow on top for very tall peaks
+    if (height > 1.8) {
+      var snowMat = new THREE.MeshStandardMaterial({ color: 0xE8E8F0, roughness: 0.7 });
+      var snow = new THREE.Mesh(new THREE.SphereGeometry(baseR * 0.55, 6, 4), snowMat);
+      snow.scale.y = 0.25;
+      snow.position.y = height + 0.15;
+      g.add(snow);
+    }
+  }
+
+  g.position.set(wx, hY, wz);
+  g.rotation.y = rng() * Math.PI * 2;
+  group.add(g);
+}
+
+function addCaveMouth(g, rng) {
+  // Dark interior
+  var interior = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.2, 1.0),
+    mCaveDark
+  );
+  interior.position.set(0, 0.55, -0.15);
+  g.add(interior);
+
+  // Rocky frame - left pillar
+  var leftH = 1.2 + rng() * 0.4;
+  var left = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.25, leftH, 6),
+    mCaveFrame
+  );
+  left.position.set(-0.55, leftH / 2, 0);
+  left.castShadow = true;
+  g.add(left);
+
+  // Right pillar
+  var rightH = 1.1 + rng() * 0.5;
+  var right = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.22, rightH, 6),
+    mCaveFrame
+  );
+  right.position.set(0.55, rightH / 2, 0);
+  right.castShadow = true;
+  g.add(right);
+
+  // Arch top
+  var arch = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 0.35, 0.4),
+    mMountainRock
+  );
+  arch.position.set(0, Math.max(leftH, rightH) + 0.1, 0);
+  arch.castShadow = true;
+  g.add(arch);
+
+  // Stalactites
+  for (var i = 0; i < 3; i++) {
+    var sx = (rng() - 0.5) * 0.8;
+    var sh = 0.15 + rng() * 0.2;
+    var stal = new THREE.Mesh(
+      new THREE.ConeGeometry(0.04, sh, 4),
+      mMountainRockD
+    );
+    stal.rotation.x = Math.PI; // point downward
+    stal.position.set(sx, Math.max(leftH, rightH) - 0.05, -0.05);
+    g.add(stal);
+  }
+
+  // Boulders around entrance
+  for (var j = 0; j < 4; j++) {
+    var br = 0.1 + rng() * 0.12;
+    var bx = (rng() - 0.5) * 1.2;
+    var bz = rng() * 0.3;
+    var boulder = new THREE.Mesh(
+      new THREE.SphereGeometry(br, 5, 4),
+      mMountainRockD
+    );
+    boulder.scale.y = 0.5 + rng() * 0.3;
+    boulder.position.set(bx, br * 0.3, bz);
+    boulder.castShadow = true;
+    g.add(boulder);
+  }
 }

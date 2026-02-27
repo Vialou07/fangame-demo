@@ -68,9 +68,31 @@ export var mReed = new THREE.MeshStandardMaterial({ color: 0x4A8838, roughness: 
 export var mLilyPad = new THREE.MeshStandardMaterial({ color: 0x2E7830, roughness: 0.6, side: THREE.DoubleSide });
 export var mLilyFlower = new THREE.MeshStandardMaterial({ color: 0xF0A0B8, roughness: 0.4 });
 
+// Grass palette (6 variants for natural variation instead of just 2)
+export var grassMats = [
+  mGrass,  // 0x58C060
+  mGrassD, // 0x48A850
+  new THREE.MeshStandardMaterial({ color: 0x4EB858, roughness: 0.84 }),
+  new THREE.MeshStandardMaterial({ color: 0x52B050, roughness: 0.87 }),
+  new THREE.MeshStandardMaterial({ color: 0x45A548, roughness: 0.86 }),
+  new THREE.MeshStandardMaterial({ color: 0x55B860, roughness: 0.83 }),
+];
+
+// Path palette (3 variants)
+export var pathMats = [
+  mPath, // 0xE0CFA0
+  new THREE.MeshStandardMaterial({ color: 0xD8C498, roughness: 0.92 }),
+  new THREE.MeshStandardMaterial({ color: 0xE4D4A8, roughness: 0.88 }),
+];
+
 // ===================== SHARED GEOS =====================
-export var tileGeo = new THREE.BoxGeometry(TILE, 0.12, TILE);
+// Slightly oversized tiles (2% overlap) to eliminate visible grid seams
+export var tileGeo = new THREE.BoxGeometry(TILE * 1.02, 0.12, TILE * 1.02);
 export var waterGeo = new THREE.BoxGeometry(TILE, 0.05, TILE);
+
+// Subdivided plane for shader-based water/lava (needs vertices for wave displacement)
+export var waterPlaneGeo = new THREE.PlaneGeometry(TILE * 1.04, TILE * 1.04, 8, 8);
+waterPlaneGeo.rotateX(-Math.PI / 2);
 
 // Instanced geometries (shared across all chunks)
 export var bladeGeo = new THREE.ConeGeometry(0.018, 0.15, 4);
