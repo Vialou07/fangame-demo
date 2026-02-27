@@ -62,6 +62,32 @@ export var mRock = new THREE.MeshStandardMaterial({ color: 0x7A7A7A, roughness: 
 export var mRockD = new THREE.MeshStandardMaterial({ color: 0x5A5A5A, roughness: 0.85 });
 export var mLava = new THREE.MeshStandardMaterial({ color: 0xE04010, roughness: 0.3, emissive: 0xFF4500, emissiveIntensity: 0.6 });
 
+// Interior materials
+export var mFloorWood = new THREE.MeshStandardMaterial({ color: 0xC8A870, roughness: 0.8 });
+export var mFloorTile = new THREE.MeshStandardMaterial({ color: 0xE0E0E8, roughness: 0.75 });
+export var mIntWall = new THREE.MeshStandardMaterial({ color: 0xF0ECE0, roughness: 0.7 });
+export var mIntWallTop = new THREE.MeshStandardMaterial({ color: 0xE8E4D8, roughness: 0.72 });
+export var mCounter = new THREE.MeshStandardMaterial({ color: 0x9B7040, roughness: 0.65 });
+export var mCounterTop = new THREE.MeshStandardMaterial({ color: 0xD0C4B0, roughness: 0.6 });
+export var mTableWood = new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.7 });
+export var mChairSeat = new THREE.MeshStandardMaterial({ color: 0xA07848, roughness: 0.75 });
+export var mShelfWood = new THREE.MeshStandardMaterial({ color: 0x7A5A38, roughness: 0.8 });
+export var mBook1 = new THREE.MeshStandardMaterial({ color: 0xC04040, roughness: 0.85 });
+export var mBook2 = new THREE.MeshStandardMaterial({ color: 0x4060A0, roughness: 0.85 });
+export var mBook3 = new THREE.MeshStandardMaterial({ color: 0x40A060, roughness: 0.85 });
+export var mBedFrame = new THREE.MeshStandardMaterial({ color: 0x7A5A38, roughness: 0.75 });
+export var mBedSheet = new THREE.MeshStandardMaterial({ color: 0xE8E0F0, roughness: 0.6 });
+export var mPillow = new THREE.MeshStandardMaterial({ color: 0xF0F0F8, roughness: 0.55 });
+export var mRug1 = new THREE.MeshStandardMaterial({ color: 0xB04040, roughness: 0.9 });
+export var mPotTerra = new THREE.MeshStandardMaterial({ color: 0xB07040, roughness: 0.85 });
+export var mPotLeaf = new THREE.MeshStandardMaterial({ color: 0x40A048, roughness: 0.6 });
+export var mMonitor = new THREE.MeshStandardMaterial({ color: 0x303040, roughness: 0.4 });
+export var mScreen = new THREE.MeshStandardMaterial({ color: 0x60C0F0, roughness: 0.2, emissive: 0x60C0F0, emissiveIntensity: 0.3 });
+export var mHealMachine = new THREE.MeshStandardMaterial({ color: 0xE04040, roughness: 0.5 });
+export var mHealLight = new THREE.MeshStandardMaterial({ color: 0x60FF80, roughness: 0.2, emissive: 0x60FF80, emissiveIntensity: 0.4 });
+export var mCabinetWood = new THREE.MeshStandardMaterial({ color: 0x8B6840, roughness: 0.8 });
+export var mExitArrow = new THREE.MeshStandardMaterial({ color: 0xFF8800, roughness: 0.4, emissive: 0xFF6600, emissiveIntensity: 0.3 });
+
 // Water details
 export var mSand = new THREE.MeshStandardMaterial({ color: 0xD8C898, roughness: 0.9 });
 export var mReed = new THREE.MeshStandardMaterial({ color: 0x4A8838, roughness: 0.75 });

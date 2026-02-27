@@ -79,9 +79,6 @@ export function updateZoneHUD(px, pz) {
     return;
   }
 
-  // Trigger screen fade transition (simulates map loading)
-  triggerFade();
-
   nameEl.textContent = name;
   if (zone.sub) {
     subEl.textContent = zone.sub;

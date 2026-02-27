@@ -72,7 +72,7 @@ export function buildWorld(worldGroup) {
 // Used by buildWorld now, and by chunk manager later
 export function buildChunk(startX, startZ, width, height) {
   var group = new THREE.Group();
-  _ctx = { blades: [], waterTiles: [], lilyPads: [] };
+  _ctx = { blades: [], waterTiles: [], lilyPads: [], lampLights: [] };
 
   var endX = Math.min(startX + width, MAP_W);
   var endZ = Math.min(startZ + height, MAP_H);
@@ -115,7 +115,7 @@ export function buildChunk(startX, startZ, width, height) {
 
   flushInstances(group);
 
-  var result = { group: group, waterTiles: _ctx.waterTiles, lilyPads: _ctx.lilyPads };
+  var result = { group: group, waterTiles: _ctx.waterTiles, lilyPads: _ctx.lilyPads, lampLights: _ctx.lampLights };
   _ctx = null;
   return result;
 }
@@ -748,8 +748,23 @@ function addLampPost(group, wx, wz) {
   var globe = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mLampLight);
   globe.position.y = 1.22;
   g.add(globe);
+  // Night glow point light (intensity controlled by main loop, only nearest are active)
+  var light = new THREE.PointLight(0xFFE8A0, 0, 8, 1.2);
+  light.position.y = 1.2;
+  light._worldX = wx;
+  light._worldZ = wz;
+  g.add(light);
+  // Light pool on ground (emissive circle for visual warmth even when PointLight is off)
+  var poolGeo = new THREE.CircleGeometry(1.2, 12);
+  poolGeo.rotateX(-Math.PI / 2);
+  var poolMat = new THREE.MeshBasicMaterial({ color: 0xFFE8A0, transparent: true, opacity: 0, depthWrite: false });
+  var pool = new THREE.Mesh(poolGeo, poolMat);
+  pool.position.y = 0.02;
+  g.add(pool);
+  light._poolMat = poolMat;
   g.position.set(wx, getHeight(wx, wz), wz);
   group.add(g);
+  if (_ctx) _ctx.lampLights.push(light);
 }
 
 function addFence(group, wx, wz) {

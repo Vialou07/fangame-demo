@@ -22,9 +22,10 @@ var loaded = {};
 // Ground plane that follows the player
 var ground = null;
 
-// All water/lily arrays for animation (collected from loaded chunks)
+// All water/lily/lamp arrays for animation (collected from loaded chunks)
 export var allWaterTiles = [];
 export var allLilyPads = [];
+export var allLampLights = [];
 
 export function initChunks(worldGroup) {
   // Large ground plane (follows player, see updateChunks)
@@ -106,7 +107,8 @@ function loadChunk(key, worldGroup) {
   loaded[key] = {
     group: chunk.group,
     waterTiles: chunk.waterTiles,
-    lilyPads: chunk.lilyPads
+    lilyPads: chunk.lilyPads,
+    lampLights: chunk.lampLights || []
   };
 
   // Rebuild animation arrays
@@ -171,10 +173,12 @@ function unloadChunk(key, worldGroup) {
 function rebuildAnimArrays() {
   allWaterTiles = [];
   allLilyPads = [];
+  allLampLights = [];
   for (var key in loaded) {
     var c = loaded[key];
     for (var i = 0; i < c.waterTiles.length; i++) allWaterTiles.push(c.waterTiles[i]);
     for (var j = 0; j < c.lilyPads.length; j++) allLilyPads.push(c.lilyPads[j]);
+    for (var k = 0; k < c.lampLights.length; k++) allLampLights.push(c.lampLights[k]);
   }
 }
 

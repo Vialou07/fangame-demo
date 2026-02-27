@@ -5,8 +5,8 @@ import { createScene } from './engine/scene.js';
 import { createCamera, zoom, updateCameraZoom, setupPinchZoom, CAM_DX, CAM_DY, CAM_DZ } from './engine/camera.js';
 import { setupLighting, updateShadow } from './engine/lighting.js';
 import { createInput } from './engine/input.js';
-import { MAP_W, MAP_H, MOVE_SPEED, SPRINT_MULT, isBlocked, BIOME_MAP } from './data/map.js';
-import { initChunks, updateChunks, allWaterTiles, allLilyPads } from './engine/chunks.js';
+import { MAP_W, MAP_H, MAP, BLDG_TYPE, MOVE_SPEED, SPRINT_MULT, isBlocked, BIOME_MAP, D as DOOR_TILE } from './data/map.js';
+import { initChunks, updateChunks, allWaterTiles, allLilyPads, allLampLights } from './engine/chunks.js';
 import { createPlayer, PLAYER_COLORS } from './players/factory.js';
 import { remotePlayers, getOrCreateRemote, removeRemote } from './players/remote.js';
 import { initFirebase } from './network/firebase.js';
@@ -18,10 +18,14 @@ import { initMinimap, updateMinimap, isFullMapOpen } from './ui/minimap.js';
 import { initZoneHUD, updateZoneHUD } from './ui/zonehud.js';
 import { preloadAllModels } from './world/modelRegistry.js';
 import { initHeightMap, getHeightSmooth } from './world/heightMap.js';
-import { initParticles, updateParticles } from './world/particles.js';
+import { initParticles, updateParticles, updateFireflies } from './world/particles.js';
 import { BIOME } from './data/biomes.js';
 import { initShaderMaterials, shaderTime } from './world/shaders.js';
 import { zoneTheme } from './ui/zonehud.js';
+import { INTERIORS, isBlockedInterior, DX } from './data/interiors.js';
+import { buildInterior } from './world/interiorBuilder.js';
+import { initDayNight, updateDayNight, dayState, getTimeLabel, isNight, getNightFactor } from './engine/daynight.js';
+import { mLampLight } from './world/materials.js';
 
 // Show info text only on desktop
 var infoEl = document.getElementById('info');
@@ -37,7 +41,8 @@ var { sun } = setupLighting(scene);
 var keys = createInput();
 setupPinchZoom(renderer.domElement);
 
-// ===================== SHADERS + HEIGHT MAP + CHUNKS =====================
+// ===================== DAY/NIGHT + SHADERS + HEIGHT MAP + CHUNKS =====================
+initDayNight(scene, sun);
 initShaderMaterials();
 initHeightMap();
 initChunks(worldGroup);
@@ -66,6 +71,8 @@ var pathMarker = null;
 })();
 
 function handleClickToMove(clientX, clientY) {
+  // Disable click-to-move inside interiors (pathfinding uses exterior map)
+  if (interiorState.active) return;
   mouseVec.x = (clientX / window.innerWidth) * 2 - 1;
   mouseVec.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouseVec, camera);
@@ -152,15 +159,25 @@ var state = {
 // ===================== TELEPORT + MINIMAP =====================
 var SAFE_SPAWN = { x: 80, z: 62 }; // Bourg-Aurore center
 
+// Check if a position is safe for the player (all 4 hitbox corners unblocked)
+function isSafeSpot(tx, tz) {
+  var cx = tx + 0.5;
+  var cz = tz + 0.5;
+  var r = 0.25; // slightly larger than player radius (0.22) for safety
+  var x1 = Math.floor(cx - r + 0.5), x2 = Math.floor(cx + r + 0.5);
+  var z1 = Math.floor(cz - r + 0.5), z2 = Math.floor(cz + r + 0.5);
+  return !isBlocked(x1, z1) && !isBlocked(x2, z1) && !isBlocked(x1, z2) && !isBlocked(x2, z2);
+}
+
 function teleportTo(x, z) {
-  // Find nearest unblocked tile if target is blocked
-  if (isBlocked(x, z)) {
+  // Find nearest safe tile (checks all hitbox corners, not just center)
+  if (!isSafeSpot(x, z)) {
     var found = false;
-    for (var r = 1; r < 10 && !found; r++) {
+    for (var r = 1; r < 15 && !found; r++) {
       for (var dz = -r; dz <= r && !found; dz++) {
         for (var dx = -r; dx <= r && !found; dx++) {
           if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
-          if (!isBlocked(x + dx, z + dz)) {
+          if (isSafeSpot(x + dx, z + dz)) {
             x = x + dx;
             z = z + dz;
             found = true;
@@ -182,6 +199,10 @@ function teleportTo(x, z) {
 
 // SOS button
 document.getElementById('sos-btn').addEventListener('click', function() {
+  if (interiorState.active) {
+    exitBuilding();
+    return;
+  }
   teleportTo(SAFE_SPAWN.x, SAFE_SPAWN.z);
 });
 
@@ -192,6 +213,195 @@ initMinimap(function(tileX, tileZ) {
 
 // Init zone name HUD
 initZoneHUD();
+
+// ===================== INTERIOR STATE =====================
+var interiorState = {
+  active: false,
+  buildingType: 0,
+  interiorGroup: null,
+  interiorDef: null,
+  savedX: 0,
+  savedZ: 0,
+  savedAngle: 0,
+  nearDoor: false
+};
+
+var enterPrompt = document.getElementById('enter-prompt');
+var interiorNameEl = document.getElementById('interior-name');
+
+// Check if player is near a door tile (exterior)
+function isNearDoor(px, pz) {
+  var tx = Math.floor(px);
+  var tz = Math.floor(pz);
+  // Check current tile and surrounding tiles
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dx = -1; dx <= 1; dx++) {
+      var cx = tx + dx;
+      var cz = tz + dz;
+      if (cx < 0 || cz < 0 || cx >= MAP_W || cz >= MAP_H) continue;
+      if (MAP[cz][cx] === DOOR_TILE) {
+        // Must be close enough
+        var dist = Math.sqrt((px - cx) * (px - cx) + (pz - cz) * (pz - cz));
+        if (dist < 1.2) {
+          var bt = BLDG_TYPE[cz] ? BLDG_TYPE[cz][cx] : 0;
+          if (bt > 0 && INTERIORS[bt]) return bt;
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+function enterBuilding(buildingType) {
+  var def = INTERIORS[buildingType];
+  if (!def || interiorState.active) return;
+
+  interiorState.active = true;
+  interiorState.buildingType = buildingType;
+  interiorState.interiorDef = def;
+  interiorState.savedX = playerX;
+  interiorState.savedZ = playerZ;
+  interiorState.savedAngle = targetAngle;
+
+  // Screen fade to black
+  var fadeEl = document.getElementById('zone-fade');
+  if (fadeEl) fadeEl.classList.add('active');
+
+  setTimeout(function() {
+    // Hide exterior world
+    worldGroup.visible = false;
+
+    // Build interior
+    var intGroup = buildInterior(def);
+    interiorState.interiorGroup = intGroup;
+    scene.add(intGroup);
+
+    // Place player at interior spawn
+    playerX = def.spawnX + 0.5;
+    playerZ = def.spawnZ + 0.5;
+    state.playerX = playerX;
+    state.playerZ = playerZ;
+    playerGroup.position.set(playerX, 0, playerZ);
+    targetAngle = 0; // Face north
+
+    // Update camera instantly
+    camera.position.set(playerX + CAM_DX, CAM_DY, playerZ + CAM_DZ);
+
+    // Clear path
+    pathQueue = [];
+    pathMarker.visible = false;
+
+    // Show interior name
+    if (interiorNameEl) {
+      interiorNameEl.textContent = def.name;
+      interiorNameEl.classList.add('visible');
+    }
+
+    // Hide enter prompt
+    if (enterPrompt) enterPrompt.classList.remove('visible');
+
+    // Fade back in
+    setTimeout(function() {
+      if (fadeEl) fadeEl.classList.remove('active');
+    }, 100);
+  }, 200);
+}
+
+function exitBuilding() {
+  if (!interiorState.active) return;
+
+  var fadeEl = document.getElementById('zone-fade');
+  if (fadeEl) fadeEl.classList.add('active');
+
+  setTimeout(function() {
+    // Remove interior
+    if (interiorState.interiorGroup) {
+      scene.remove(interiorState.interiorGroup);
+      // Dispose interior meshes
+      interiorState.interiorGroup.traverse(function(child) {
+        if (child.isMesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material && child.material.dispose) child.material.dispose();
+        }
+      });
+      interiorState.interiorGroup = null;
+    }
+
+    // Show exterior world
+    worldGroup.visible = true;
+
+    // Restore player position (slightly south of door)
+    playerX = interiorState.savedX;
+    playerZ = interiorState.savedZ + 1.0; // Step south from door
+    state.playerX = playerX;
+    state.playerZ = playerZ;
+    targetAngle = Math.PI; // Face south
+
+    var py = getHeightSmooth(playerX, playerZ);
+    playerGroup.position.set(playerX, py, playerZ);
+
+    // Update camera instantly
+    camera.position.set(playerX + CAM_DX, CAM_DY + py, playerZ + CAM_DZ);
+
+    // Force chunk reload
+    updateChunks(playerX, playerZ, worldGroup);
+
+    // Hide interior name
+    if (interiorNameEl) interiorNameEl.classList.remove('visible');
+
+    interiorState.active = false;
+    interiorState.interiorDef = null;
+    interiorState.buildingType = 0;
+
+    // Fade back in
+    setTimeout(function() {
+      if (fadeEl) fadeEl.classList.remove('active');
+    }, 100);
+  }, 200);
+}
+
+// Check if standing on exit tile inside an interior
+function isOnExitTile(px, pz) {
+  if (!interiorState.interiorDef) return false;
+  var def = interiorState.interiorDef;
+  var tx = Math.floor(px);
+  var tz = Math.floor(pz);
+  if (tx < 0 || tz < 0 || tx >= def.width || tz >= def.height) return false;
+  return def.layout[tz][tx] === DX;
+}
+
+// Collision check wrapper: uses interior or exterior depending on state
+function checkBlocked(nx, nz) {
+  if (interiorState.active && interiorState.interiorDef) {
+    return isBlockedInterior(interiorState.interiorDef, nx, nz);
+  }
+  return isBlocked(nx, nz);
+}
+
+// E key listener for entering buildings
+window.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT') return;
+  if ((e.key === 'e' || e.key === 'E') && !interiorState.active && interiorState.nearDoor) {
+    enterBuilding(interiorState.nearDoor);
+  }
+});
+
+// N key: cycle day/night speed (1x → 10x → 50x → pause → 1x)
+window.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'n' || e.key === 'N') {
+    if (dayState.paused) {
+      dayState.paused = false;
+      dayState.speed = 1;
+    } else if (dayState.speed === 1) {
+      dayState.speed = 10;
+    } else if (dayState.speed === 10) {
+      dayState.speed = 50;
+    } else {
+      dayState.paused = true;
+    }
+  }
+});
 
 // Open full map with M key
 window.addEventListener('keydown', function(e) {
@@ -220,8 +430,15 @@ async function enterWorld(uid, displayName, colorIndex) {
     if (gameState && gameState.position) {
       playerX = gameState.position.x;
       playerZ = gameState.position.z;
-      state.playerX = playerX;
-      state.playerZ = playerZ;
+      // Verify saved position is safe; teleport to nearest safe spot if stuck
+      var tx = Math.floor(playerX);
+      var tz = Math.floor(playerZ);
+      if (!isSafeSpot(tx, tz)) {
+        teleportTo(tx, tz);
+      } else {
+        state.playerX = playerX;
+        state.playerZ = playerZ;
+      }
       playerGroup.position.set(playerX, getHeightSmooth(playerX, playerZ), playerZ);
       if (gameState.position.ry !== undefined) {
         playerGroup.rotation.y = gameState.position.ry;
@@ -330,6 +547,11 @@ window.addEventListener('resize', function() {
 var clock = new THREE.Clock();
 var camPosV = new THREE.Vector3();
 var projV = new THREE.Vector3();
+var _blendCol1 = new THREE.Color();
+var _blendCol2 = new THREE.Color();
+
+// Time display element
+var _timeEl = document.getElementById('time-display');
 
 camera.position.set(playerX + CAM_DX, CAM_DY, playerZ + CAM_DZ);
 camera.lookAt(playerX, 0, playerZ);
@@ -389,13 +611,13 @@ function animate() {
 
     var cx1 = Math.floor(newX - r + 0.5), cx2 = Math.floor(newX + r + 0.5);
     var cz1 = Math.floor(playerZ - r + 0.5), cz2 = Math.floor(playerZ + r + 0.5);
-    if (!isBlocked(cx1, cz1) && !isBlocked(cx2, cz1) && !isBlocked(cx1, cz2) && !isBlocked(cx2, cz2)) {
+    if (!checkBlocked(cx1, cz1) && !checkBlocked(cx2, cz1) && !checkBlocked(cx1, cz2) && !checkBlocked(cx2, cz2)) {
       playerX = newX;
     }
 
     cx1 = Math.floor(playerX - r + 0.5); cx2 = Math.floor(playerX + r + 0.5);
     cz1 = Math.floor(newZ - r + 0.5); cz2 = Math.floor(newZ + r + 0.5);
-    if (!isBlocked(cx1, cz1) && !isBlocked(cx2, cz1) && !isBlocked(cx1, cz2) && !isBlocked(cx2, cz2)) {
+    if (!checkBlocked(cx1, cz1) && !checkBlocked(cx2, cz1) && !checkBlocked(cx1, cz2) && !checkBlocked(cx2, cz2)) {
       playerZ = newZ;
     }
 
@@ -440,7 +662,8 @@ function animate() {
   state.playerX = playerX;
   state.playerZ = playerZ;
 
-  var targetY = getHeightSmooth(playerX, playerZ);
+  // Interior: flat floor Y=0; Exterior: height map
+  var targetY = interiorState.active ? 0 : getHeightSmooth(playerX, playerZ);
   playerGroup.position.x += (playerX - playerGroup.position.x) * 10 * dt;
   playerGroup.position.y += (targetY - playerGroup.position.y) * 8 * dt;
   playerGroup.position.z += (playerZ - playerGroup.position.z) * 10 * dt;
@@ -449,6 +672,25 @@ function animate() {
   while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
   while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
   playerGroup.rotation.y += angleDiff * 10 * dt;
+
+  // --- Door proximity / exit detection ---
+  if (interiorState.active) {
+    // Check if player is on exit tile
+    if (isOnExitTile(playerX, playerZ) && moving && dz > 0) {
+      exitBuilding();
+    }
+  } else {
+    // Check if near a door in the exterior
+    var nearBt = isNearDoor(playerX, playerZ);
+    interiorState.nearDoor = nearBt;
+    if (enterPrompt) {
+      if (nearBt > 0) {
+        enterPrompt.classList.add('visible');
+      } else {
+        enterPrompt.classList.remove('visible');
+      }
+    }
+  }
 
   // --- Remote players interpolation + nametags ---
   for (var pid in remotePlayers) {
@@ -504,18 +746,95 @@ function animate() {
 
   syncPosition(time, state);
 
-  // Update chunks around player
-  updateChunks(playerX, playerZ, worldGroup);
+  // Exterior-only updates (skip when inside a building)
+  if (!interiorState.active) {
+    // Update chunks around player
+    updateChunks(playerX, playerZ, worldGroup);
 
-  for (var i = 0; i < allWaterTiles.length; i++) {
-    allWaterTiles[i].position.y = -0.03 + Math.sin(time * 1.5 + i * 0.7) * 0.015;
-  }
-  for (var j = 0; j < allLilyPads.length; j++) {
-    allLilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
-  }
+    for (var i = 0; i < allWaterTiles.length; i++) {
+      allWaterTiles[i].position.y = -0.03 + Math.sin(time * 1.5 + i * 0.7) * 0.015;
+    }
+    for (var j = 0; j < allLilyPads.length; j++) {
+      allLilyPads[j].position.y += Math.sin(time * 1.2 + j * 1.3) * 0.0003;
+    }
 
-  // Update shadow camera to follow player
-  updateShadow(sun, playerX, playerZ);
+    // Day/night cycle (updates sun position, light colors, intensities)
+    updateDayNight(dt, playerX, playerZ);
+
+    // Lamppost night glow — only nearest 6 PointLights active for performance
+    var nf = getNightFactor();
+    var MAX_ACTIVE_LIGHTS = 6;
+    if (nf > 0.01) {
+      // Calculate distances, disable all first, then enable closest
+      for (var li = 0; li < allLampLights.length; li++) {
+        var ll = allLampLights[li];
+        ll._dist = (ll._worldX - playerX) * (ll._worldX - playerX) + (ll._worldZ - playerZ) * (ll._worldZ - playerZ);
+        ll.intensity = 0;
+        // Light pool always shows on all lamps (cheap visual)
+        if (ll._poolMat) ll._poolMat.opacity = nf * 0.12;
+      }
+      // Find nearest N and activate them
+      var sorted = allLampLights.slice().sort(function(a, b) { return a._dist - b._dist; });
+      var count = Math.min(MAX_ACTIVE_LIGHTS, sorted.length);
+      for (var si = 0; si < count; si++) {
+        sorted[si].intensity = nf * 2.5;
+      }
+    } else {
+      // Daytime: all lights off
+      for (var li = 0; li < allLampLights.length; li++) {
+        allLampLights[li].intensity = 0;
+        if (allLampLights[li]._poolMat) allLampLights[li]._poolMat.opacity = 0;
+      }
+    }
+    // Globe emissive glow: brighter at night (applies to ALL lamp globes, no GPU cost)
+    mLampLight.emissiveIntensity = 0.3 + nf * 1.5;
+
+    // Fireflies at night
+    updateFireflies(dt, playerX, playerZ, nf, time);
+
+    // Update minimap + zone HUD
+    updateMinimap(playerX, playerZ, remotePlayers);
+    updateZoneHUD(playerX, playerZ);
+
+    // Leaf/dust particles
+    updateParticles(dt, playerX, playerZ);
+
+    // Update shader time uniform (drives water + lava animation)
+    shaderTime.value = time;
+
+    // Blend zone theme with day/night sky/fog colors
+    if (scene.fog) {
+      scene.fog.density += (zoneTheme.fogDensity - scene.fog.density) * 2 * dt;
+      // Blend zone fog color with day/night tint
+      var dayFogHex = dayState._fogColor || 0x8ED8F8;
+      var zoneFogHex = zoneTheme.fogColor;
+      _blendCol1.setHex(zoneFogHex);
+      _blendCol2.setHex(dayFogHex);
+      _blendCol1.multiply(_blendCol2).multiplyScalar(1.3); // Blend = zone * daynight, brightened
+      _blendCol1.r = Math.min(_blendCol1.r, 1);
+      _blendCol1.g = Math.min(_blendCol1.g, 1);
+      _blendCol1.b = Math.min(_blendCol1.b, 1);
+      scene.fog.color.lerp(_blendCol1, 2 * dt);
+
+      var daySkyHex = dayState._skyColor || 0x8ED8F8;
+      var zoneSkyHex = zoneTheme.skyColor;
+      _blendCol1.setHex(zoneSkyHex);
+      _blendCol2.setHex(daySkyHex);
+      _blendCol1.multiply(_blendCol2).multiplyScalar(1.3);
+      _blendCol1.r = Math.min(_blendCol1.r, 1);
+      _blendCol1.g = Math.min(_blendCol1.g, 1);
+      _blendCol1.b = Math.min(_blendCol1.b, 1);
+      scene.background.lerp(_blendCol1, 2 * dt);
+    }
+
+    // Update time display
+    if (_timeEl) _timeEl.textContent = getTimeLabel();
+  } else {
+    // Interior: disable fog for clean indoor look
+    if (scene.fog) {
+      scene.fog.density += (0 - scene.fog.density) * 4 * dt;
+    }
+  }
 
   // Update camera zoom (for pinch/wheel changes)
   updateCameraZoom(camera);
@@ -523,25 +842,6 @@ function animate() {
   camPosV.set(playerGroup.position.x + CAM_DX, CAM_DY + playerGroup.position.y, playerGroup.position.z + CAM_DZ);
   camera.position.lerp(camPosV, 5 * dt);
   camera.quaternion.copy(camQuat);
-
-  // Update minimap + zone HUD
-  updateMinimap(playerX, playerZ, remotePlayers);
-  updateZoneHUD(playerX, playerZ);
-
-  // Leaf/dust particles
-  updateParticles(dt, playerX, playerZ);
-
-  // Update shader time uniform (drives water + lava animation)
-  shaderTime.value = time;
-
-  // Zone-based visual theme transitions (fog color, density, sky color)
-  if (scene.fog) {
-    scene.fog.density += (zoneTheme.fogDensity - scene.fog.density) * 2 * dt;
-    var targetFogCol = new THREE.Color(zoneTheme.fogColor);
-    scene.fog.color.lerp(targetFogCol, 2 * dt);
-    var targetSkyCol = new THREE.Color(zoneTheme.skyColor);
-    scene.background.lerp(targetSkyCol, 2 * dt);
-  }
 
   renderer.render(scene, camera);
 }

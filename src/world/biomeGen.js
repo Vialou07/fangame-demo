@@ -520,9 +520,9 @@ function placeRouteProps(map, mapW, mapH) {
 
       if (r < 0.003 && map[z - 1][x] === G) {
         map[z - 1][x] = S;
-      } else if (r < 0.006 && map[z][x + 1] === G) {
+      } else if (r < 0.015 && map[z][x + 1] === G) {
         map[z][x + 1] = L;
-      } else if (r < 0.009 && map[z + 1][x] === G) {
+      } else if (r < 0.020 && map[z + 1][x] === G) {
         map[z + 1][x] = B;
       }
     }
