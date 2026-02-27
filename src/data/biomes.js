@@ -20,10 +20,10 @@ export var BIOME_DEF = {};
 
 BIOME_DEF[BIOME.FOREST] = {
   name: 'Foret Dense',
-  treeDensity: 0.55,
+  treeDensity: 0.30,
   grassType: 'dark',
-  tallGrass: 0.15,
-  flowers: 0.02
+  tallGrass: 0.12,
+  flowers: 0.03
 };
 
 BIOME_DEF[BIOME.PLAINS] = {
@@ -88,9 +88,9 @@ BIOME_DEF[BIOME.BEACH] = {
 
 BIOME_DEF[BIOME.SWAMP] = {
   name: 'Marais',
-  treeDensity: 0.12,
+  treeDensity: 0.08,
   grassType: 'dark',
-  tallGrass: 0.25,
+  tallGrass: 0.20,
   flowers: 0.02,
   water: true
 };

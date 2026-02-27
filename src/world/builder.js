@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { TILE, MAP_W, MAP_H, MAP, G, P, W, T, H, R, D, F, S, B, L, N, TG, SD, RK, LV } from '../data/map.js';
+import { TILE, MAP_W, MAP_H, MAP, BLDG_TYPE, G, P, W, T, H, R, D, F, S, B, L, N, TG, SD, RK, LV } from '../data/map.js';
 import {
   mGrass, mGrassD, mPath, mWater, mTrunk, mLeaf, mLeafL, mLeafDark,
   mPine, mPineD, mBush, mBushD,
-  mWall, mRoof, mDoor, mDoorF, mGlass, mKnob, mStem, mFCenter, mFlowers, mStone,
+  mWall, mRoof, mRoofBlue, mRoofGreen, mRoofOrange, mRoofDarkBlue, mRoofPurple, mRoofTeal, mRoofYellow,
+  mDoor, mDoorF, mGlass, mKnob, mStem, mFCenter, mFlowers, mStone,
   mFoundation, mShutter, mChimney, mAwning, mStep,
   mSign, mSignPost, mBench, mBenchLeg, mLamp, mLampLight, mFenceWood,
   mSand, mReed, mLilyPad, mLilyFlower,
@@ -11,6 +12,22 @@ import {
   bladeGeo,
   tileGeo, waterGeo
 } from './materials.js';
+
+// Building type → roof material
+function getRoofMat(wx, wz) {
+  if (!BLDG_TYPE || !BLDG_TYPE[wz]) return mRoof;
+  switch (BLDG_TYPE[wz][wx]) {
+    case 2: return mRoofBlue;      // Labo
+    case 3: return mRoof;          // Centre Pokemon (red)
+    case 4: return mRoofGreen;     // Boutique
+    case 5: return mRoofOrange;    // Auberge
+    case 6: return mRoofDarkBlue;  // Chantier naval
+    case 7: return mRoofPurple;    // Marché
+    case 8: return mRoofTeal;      // Maison joueur
+    case 9: return mRoofYellow;    // Phare
+    default: return mRoof;
+  }
+}
 
 // ===================== INSTANCED RENDERING =====================
 // Build context for collecting instances (set during buildChunk)
@@ -409,22 +426,24 @@ function addHouseWall(group, wx, wz) {
 }
 
 function addHouseRoof(group, wx, wz) {
+  var rm = getRoofMat(wx, wz);
+
   var wall = new THREE.Mesh(new THREE.BoxGeometry(TILE, 0.9, TILE), mWall);
   wall.position.set(wx, 0.51, wz);
   wall.castShadow = true;
   group.add(wall);
 
-  var roof = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.2, 0.12, TILE + 0.2), mRoof);
+  var roof = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.2, 0.12, TILE + 0.2), rm);
   roof.position.set(wx, 1.0, wz);
   roof.castShadow = true; roof.receiveShadow = true;
   group.add(roof);
 
-  var mid = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.05, 0.1, TILE + 0.05), mRoof);
+  var mid = new THREE.Mesh(new THREE.BoxGeometry(TILE + 0.05, 0.1, TILE + 0.05), rm);
   mid.position.set(wx, 1.12, wz);
   mid.castShadow = true;
   group.add(mid);
 
-  var peak = new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.15, 0.1, TILE - 0.15), mRoof);
+  var peak = new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.15, 0.1, TILE - 0.15), rm);
   peak.position.set(wx, 1.22, wz);
   peak.castShadow = true;
   group.add(peak);

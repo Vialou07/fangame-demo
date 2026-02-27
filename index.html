@@ -108,6 +108,29 @@
     white-space: nowrap; pointer-events: none;
     font-family: system-ui; font-weight: 500;
   }
+  /* Zone name HUD */
+  #zone-hud {
+    position: fixed; top: 20px; left: 50%; z-index: 30;
+    transform: translateX(-50%) translateY(-60px);
+    background: linear-gradient(135deg, rgba(16, 24, 42, 0.92), rgba(30, 50, 80, 0.92));
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px; padding: 10px 28px;
+    text-align: center; opacity: 0; pointer-events: none;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  #zone-hud.zone-visible {
+    opacity: 1; transform: translateX(-50%) translateY(0);
+  }
+  #zone-name {
+    color: #fff; font-size: 18px; font-weight: 600;
+    font-family: system-ui; letter-spacing: 1px;
+  }
+  #zone-sub {
+    color: rgba(255,255,255,0.5); font-size: 12px;
+    font-family: system-ui; margin-top: 2px;
+  }
   @media (max-width: 768px) {
     #info { display: none !important; }
     #lobby-box { padding: 20px 20px; min-width: 0; width: 90vw; }

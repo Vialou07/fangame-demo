@@ -15,6 +15,7 @@ import { saveGame, setupAutoSave } from './network/save.js';
 import { showStatus, hideLobby, showLobby, hideBadge, updateBadge, setupLobbyHandlers } from './ui/lobby.js';
 import { findPath } from './engine/pathfinding.js';
 import { initMinimap, updateMinimap, isFullMapOpen } from './ui/minimap.js';
+import { initZoneHUD, updateZoneHUD } from './ui/zonehud.js';
 
 // Show info text only on desktop
 var infoEl = document.getElementById('info');
@@ -160,6 +161,9 @@ document.getElementById('sos-btn').addEventListener('click', function() {
 initMinimap(function(tileX, tileZ) {
   teleportTo(tileX, tileZ);
 });
+
+// Init zone name HUD
+initZoneHUD();
 
 // Open full map with M key
 window.addEventListener('keydown', function(e) {
@@ -374,9 +378,28 @@ function animate() {
     for (var i = 0; i < local.parts.length; i++) {
       local.parts[i].position.y = local.baseYs[i] + Math.sin(time * bobFreq) * bobAmp;
     }
+
+    // Limb walk/run animation
+    if (local.limbs) {
+      var walkFreq = sprinting ? 16 : 10;
+      var walkAmp = sprinting ? 0.7 : 0.5;
+      var phase = time * walkFreq;
+      local.limbs.legL.rotation.x = Math.sin(phase) * walkAmp;
+      local.limbs.legR.rotation.x = -Math.sin(phase) * walkAmp;
+      local.limbs.armL.rotation.x = -Math.sin(phase) * walkAmp * 0.7;
+      local.limbs.armR.rotation.x = Math.sin(phase) * walkAmp * 0.7;
+    }
   } else {
     for (var i = 0; i < local.parts.length; i++) {
       local.parts[i].position.y += (local.baseYs[i] - local.parts[i].position.y) * 8 * dt;
+    }
+
+    // Return limbs to neutral
+    if (local.limbs) {
+      local.limbs.legL.rotation.x += (0 - local.limbs.legL.rotation.x) * 8 * dt;
+      local.limbs.legR.rotation.x += (0 - local.limbs.legR.rotation.x) * 8 * dt;
+      local.limbs.armL.rotation.x += (0 - local.limbs.armL.rotation.x) * 8 * dt;
+      local.limbs.armR.rotation.x += (0 - local.limbs.armR.rotation.x) * 8 * dt;
     }
   }
 
@@ -415,9 +438,24 @@ function animate() {
       for (var j = 0; j < rp.player.parts.length; j++) {
         rp.player.parts[j].position.y = rp.player.baseYs[j] + Math.sin(time * 12 + 1) * 0.018;
       }
+      // Remote limb animation
+      if (rp.player.limbs) {
+        var rPhase = time * 10 + 1;
+        rp.player.limbs.legL.rotation.x = Math.sin(rPhase) * 0.5;
+        rp.player.limbs.legR.rotation.x = -Math.sin(rPhase) * 0.5;
+        rp.player.limbs.armL.rotation.x = -Math.sin(rPhase) * 0.35;
+        rp.player.limbs.armR.rotation.x = Math.sin(rPhase) * 0.35;
+      }
     } else {
       for (var j = 0; j < rp.player.parts.length; j++) {
         rp.player.parts[j].position.y += (rp.player.baseYs[j] - rp.player.parts[j].position.y) * 8 * dt;
+      }
+      // Return remote limbs to neutral
+      if (rp.player.limbs) {
+        rp.player.limbs.legL.rotation.x += (0 - rp.player.limbs.legL.rotation.x) * 8 * dt;
+        rp.player.limbs.legR.rotation.x += (0 - rp.player.limbs.legR.rotation.x) * 8 * dt;
+        rp.player.limbs.armL.rotation.x += (0 - rp.player.limbs.armL.rotation.x) * 8 * dt;
+        rp.player.limbs.armR.rotation.x += (0 - rp.player.limbs.armR.rotation.x) * 8 * dt;
       }
     }
 
@@ -456,8 +494,9 @@ function animate() {
   camera.position.lerp(camPosV, 5 * dt);
   camera.quaternion.copy(camQuat);
 
-  // Update minimap
+  // Update minimap + zone HUD
   updateMinimap(playerX, playerZ, remotePlayers);
+  updateZoneHUD(playerX, playerZ);
 
   renderer.render(scene, camera);
 }

@@ -11,6 +11,14 @@ export var mLeaf = new THREE.MeshStandardMaterial({ color: 0x30A048, roughness: 
 export var mLeafL = new THREE.MeshStandardMaterial({ color: 0x50C858, roughness: 0.6 });
 export var mWall = new THREE.MeshStandardMaterial({ color: 0xF5F0E0, roughness: 0.65 });
 export var mRoof = new THREE.MeshStandardMaterial({ color: 0xD04040, roughness: 0.5 });
+// Colored roofs by building type
+export var mRoofBlue = new THREE.MeshStandardMaterial({ color: 0x4070C0, roughness: 0.5 });
+export var mRoofGreen = new THREE.MeshStandardMaterial({ color: 0x40A050, roughness: 0.5 });
+export var mRoofOrange = new THREE.MeshStandardMaterial({ color: 0xD08030, roughness: 0.5 });
+export var mRoofDarkBlue = new THREE.MeshStandardMaterial({ color: 0x305080, roughness: 0.5 });
+export var mRoofPurple = new THREE.MeshStandardMaterial({ color: 0x8050A0, roughness: 0.5 });
+export var mRoofTeal = new THREE.MeshStandardMaterial({ color: 0x40A0A0, roughness: 0.5 });
+export var mRoofYellow = new THREE.MeshStandardMaterial({ color: 0xD0C040, roughness: 0.5 });
 export var mDoor = new THREE.MeshStandardMaterial({ color: 0x9B7040, roughness: 0.7 });
 export var mDoorF = new THREE.MeshStandardMaterial({ color: 0x603818, roughness: 0.75 });
 export var mGlass = new THREE.MeshStandardMaterial({ color: 0x90D8FF, roughness: 0.03, metalness: 0.35, transparent: true, opacity: 0.6 });

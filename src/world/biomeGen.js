@@ -16,6 +16,10 @@ var G = 0, P = 1, W = 2, T = 3, H = 4, R = 5, D = 6, F = 7;
 var S = 8, B = 9, L = 10, N = 11, TG = 12;
 var SD = 13, RK = 14, LV = 15;
 
+// Building type codes (for colored roofs)
+var BT_MAISON = 1, BT_LABO = 2, BT_CENTRE = 3, BT_BOUTIQUE = 4;
+var BT_AUBERGE = 5, BT_CHANTIER = 6, BT_MARCHE = 7, BT_JOUEUR = 8, BT_PHARE = 9;
+
 // ==================== BIOME LAYOUT ====================
 // Each cell = 20x20 tiles → 200x200 map
 var GRID_SIZE = 20;
@@ -41,13 +45,16 @@ var LAYOUT = [
 export function generateBiomeMap(mapW, mapH) {
   var map = [];
   var biomeMap = [];
+  var bldgType = [];
 
   for (var z = 0; z < mapH; z++) {
     map[z] = [];
     biomeMap[z] = [];
+    bldgType[z] = [];
     for (var x = 0; x < mapW; x++) {
       map[z][x] = G;
       biomeMap[z][x] = BIOME.PLAINS;
+      bldgType[z][x] = 0;
     }
   }
 
@@ -136,8 +143,8 @@ export function generateBiomeMap(mapW, mapH) {
   carveRoutes(map, mapW, mapH);
 
   // Pass 3: Build towns (after routes so streets connect)
-  buildTown1(map, 80, 60);
-  buildTown2(map, 130, 130);
+  buildTown1(map, bldgType, 80, 60);
+  buildTown2(map, bldgType, 130, 130);
 
   // Pass 3b: Enrich Route 1 (Bourg-Aurore → Port-Ciel)
   buildRoute1(map);
@@ -155,7 +162,7 @@ export function generateBiomeMap(mapW, mapH) {
     if (map[z][mapW - 1] === G || map[z][mapW - 1] === SD) map[z][mapW - 1] = T;
   }
 
-  return { map: map, biomeMap: biomeMap };
+  return { map: map, biomeMap: biomeMap, bldgType: bldgType };
 }
 
 // ==================== ROUTE CARVING ====================
@@ -240,16 +247,28 @@ function carvePath(map, x1, z1, x2, z2, width, mapW, mapH) {
 
 // ==================== TOWN BUILDERS ====================
 
-function buildHouse(map, x, z) {
+function buildHouse(map, bt, x, z, type) {
   if (x + 2 >= 200 || z + 1 >= 200) return;
   map[z][x] = R; map[z][x + 1] = R; map[z][x + 2] = R;
   map[z + 1][x] = H; map[z + 1][x + 1] = D; map[z + 1][x + 2] = H;
+  type = type || BT_MAISON;
+  markBldg(bt, x, z, 3, 2, type);
 }
 
-function buildLargeHouse(map, x, z) {
+function buildLargeHouse(map, bt, x, z, type) {
   if (x + 3 >= 200 || z + 1 >= 200) return;
   map[z][x] = R; map[z][x + 1] = R; map[z][x + 2] = R; map[z][x + 3] = R;
   map[z + 1][x] = H; map[z + 1][x + 1] = H; map[z + 1][x + 2] = D; map[z + 1][x + 3] = H;
+  type = type || BT_MAISON;
+  markBldg(bt, x, z, 4, 2, type);
+}
+
+function markBldg(bt, x, z, w, h, type) {
+  for (var rz = z; rz < z + h && rz < 200; rz++) {
+    for (var rx = x; rx < x + w && rx < 200; rx++) {
+      bt[rz][rx] = type;
+    }
+  }
 }
 
 function fillRect(map, x, z, w, h, tile) {
@@ -260,7 +279,7 @@ function fillRect(map, x, z, w, h, tile) {
   }
 }
 
-function buildTown1(map, cx, cz) {
+function buildTown1(map, bt, cx, cz) {
   // Bourg-Aurore: centered around (cx, cz) = (80, 60)
   // Expanded area: 36x32
   fillRect(map, cx - 17, cz - 14, 36, 32, G);
@@ -275,26 +294,28 @@ function buildTown1(map, cx, cz) {
   fillRect(map, cx - 8, cz - 10, 1, 22, P);
 
   // === Labo du Prof. Sequoia (large, 5x2, NW quadrant) ===
-  buildLargeHouse(map, cx - 12, cz - 6);
+  buildLargeHouse(map, bt, cx - 12, cz - 6, BT_LABO);
   // Extra wing
   map[cz - 6][cx - 13] = R;
   map[cz - 5][cx - 13] = H;
+  bt[cz - 6][cx - 13] = BT_LABO;
+  bt[cz - 5][cx - 13] = BT_LABO;
   // Sign outside lab
   map[cz - 4][cx - 11] = S;
 
   // === Maison du joueur (NE, near center) ===
-  buildHouse(map, cx + 4, cz - 5);
+  buildHouse(map, bt, cx + 4, cz - 5, BT_JOUEUR);
 
   // === Maisons de villageois ===
-  buildHouse(map, cx - 6, cz - 9);          // NW house 1
-  buildHouse(map, cx + 4, cz - 9);          // NE house 1
-  buildHouse(map, cx + 8, cz - 5);          // NE house 2
-  buildLargeHouse(map, cx - 12, cz + 3);    // SW house 1
-  buildHouse(map, cx - 6, cz + 4);          // SW house 2
-  buildHouse(map, cx + 4, cz + 4);          // SE house 1
-  buildLargeHouse(map, cx + 7, cz + 4);     // SE house 2
-  buildHouse(map, cx - 6, cz + 10);         // South house 1
-  buildHouse(map, cx + 4, cz + 10);         // South house 2
+  buildHouse(map, bt, cx - 6, cz - 9);          // NW house 1
+  buildHouse(map, bt, cx + 4, cz - 9);          // NE house 1
+  buildHouse(map, bt, cx + 8, cz - 5);          // NE house 2
+  buildLargeHouse(map, bt, cx - 12, cz + 3);    // SW house 1
+  buildHouse(map, bt, cx - 6, cz + 4);          // SW house 2
+  buildHouse(map, bt, cx + 4, cz + 4);          // SE house 1
+  buildLargeHouse(map, bt, cx + 7, cz + 4);     // SE house 2
+  buildHouse(map, bt, cx - 6, cz + 10);         // South house 1
+  buildHouse(map, bt, cx + 4, cz + 10);         // South house 2
 
   // === Parc (NE area) ===
   fillRect(map, cx + 5, cz - 12, 8, 4, G);
@@ -346,7 +367,7 @@ function buildTown1(map, cx, cz) {
   fillRect(map, cx - 8, cz + 10, 3, 1, P); // Connect secondary street to pond area
 }
 
-function buildTown2(map, cx, cz) {
+function buildTown2(map, bt, cx, cz) {
   // Port-Ciel: ville portuaire centered around (cx, cz) = (130, 130)
   // Expanded area: 34x30
   fillRect(map, cx - 16, cz - 13, 34, 30, G);
@@ -372,20 +393,20 @@ function buildTown2(map, cx, cz) {
   fillRect(map, cx + 10, cz + 14, 8, 3, W);   // Ocean
 
   // === Bâtiments — quartier nord ===
-  buildLargeHouse(map, cx - 10, cz - 6);   // Centre Pokemon (large)
-  buildHouse(map, cx - 4, cz - 6);          // Maison 1
-  buildHouse(map, cx + 4, cz - 6);          // Boutique
-  buildLargeHouse(map, cx + 8, cz - 6);     // Auberge
+  buildLargeHouse(map, bt, cx - 10, cz - 6, BT_CENTRE);   // Centre Pokemon (large)
+  buildHouse(map, bt, cx - 4, cz - 6);                     // Maison 1
+  buildHouse(map, bt, cx + 4, cz - 6, BT_BOUTIQUE);       // Boutique
+  buildLargeHouse(map, bt, cx + 8, cz - 6, BT_AUBERGE);   // Auberge
 
   // === Bâtiments — quartier nord-est ===
-  buildHouse(map, cx - 10, cz - 10);
-  buildHouse(map, cx + 4, cz - 10);
+  buildHouse(map, bt, cx - 10, cz - 10);
+  buildHouse(map, bt, cx + 4, cz - 10);
 
   // === Bâtiments — quartier sud ===
-  buildLargeHouse(map, cx - 12, cz + 4);    // Chantier naval
-  buildHouse(map, cx - 6, cz + 4);           // Maison pêcheur 1
-  buildHouse(map, cx + 4, cz + 4);           // Maison pêcheur 2
-  buildLargeHouse(map, cx + 4, cz + 7);      // Marché aux poissons
+  buildLargeHouse(map, bt, cx - 12, cz + 4, BT_CHANTIER);  // Chantier naval
+  buildHouse(map, bt, cx - 6, cz + 4);                       // Maison pêcheur 1
+  buildHouse(map, bt, cx + 4, cz + 4);                       // Maison pêcheur 2
+  buildLargeHouse(map, bt, cx + 4, cz + 7, BT_MARCHE);      // Marché aux poissons
 
   // === Phare (NE, tall landmark — simulated with stacked roofs) ===
   map[cz - 11][cx + 10] = R;
@@ -394,6 +415,7 @@ function buildTown2(map, cx, cz) {
   map[cz - 10][cx + 11] = H;
   map[cz - 12][cx + 10] = R;
   map[cz - 12][cx + 11] = R;
+  markBldg(bt, cx + 10, cz - 12, 2, 3, BT_PHARE);
 
   // === Place du marché (paved area) ===
   fillRect(map, cx + 5, cz - 3, 5, 5, P);

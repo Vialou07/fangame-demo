@@ -17,6 +17,7 @@ export var LV = 15; // Lava (blocking)
 var _gen = generateBiomeMap(MAP_W, MAP_H);
 export var MAP = _gen.map;
 export var BIOME_MAP = _gen.biomeMap;
+export var BLDG_TYPE = _gen.bldgType;
 
 export function isBlocked(x, y) {
   if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return true;
