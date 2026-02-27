@@ -51,6 +51,153 @@ updateChunks(80, 62, worldGroup); // Initial load around Bourg-Aurore spawn
 // ===================== PARTICLES =====================
 initParticles(scene);
 
+// ===================== SHINY RAYQUAZA (Bourg-Aurore landmark) =====================
+var rayquazaGroup = new THREE.Group();
+var raySegments = []; // { mesh, baseY, phase } for animation
+
+(function buildRayquaza() {
+  var BODY_COL = 0x1A1A2A;  // Shiny = black body
+  var GOLD = 0xFFD700;       // Gold markings
+  var RED = 0xFF2020;        // Red eyes
+  var DARK = 0x111118;       // Darker accents
+
+  var mBody = new THREE.MeshStandardMaterial({ color: BODY_COL, roughness: 0.35, metalness: 0.4 });
+  var mGold = new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.25, metalness: 0.7, emissive: GOLD, emissiveIntensity: 0.3 });
+  var mEye = new THREE.MeshStandardMaterial({ color: RED, emissive: RED, emissiveIntensity: 0.8, roughness: 0.1 });
+  var mDark = new THREE.MeshStandardMaterial({ color: DARK, roughness: 0.3, metalness: 0.5 });
+  var mGoldBright = new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.15, metalness: 0.8, emissive: GOLD, emissiveIntensity: 0.5 });
+
+  // Body: serpentine S-curve (20 segments)
+  var SEG = 20;
+  var bodyRadius = [];
+  for (var i = 0; i < SEG; i++) {
+    var t = i / (SEG - 1);
+    // Thicker in middle, tapers at head and tail
+    var r = 0.22 + Math.sin(t * Math.PI) * 0.18;
+    if (i < 3) r *= 0.7 + i * 0.1; // tail taper
+    if (i > SEG - 3) r *= 0.8;     // head slightly narrower
+    bodyRadius.push(r);
+  }
+
+  for (var i = 0; i < SEG; i++) {
+    var t = i / (SEG - 1);
+    // S-curve path
+    var sx = Math.sin(t * Math.PI * 2.5) * 1.2;
+    var sz = (t - 0.5) * 6;
+    var sy = Math.sin(t * Math.PI) * 0.8 + 3.5; // Arc upward
+
+    var segGeo = new THREE.SphereGeometry(bodyRadius[i], 10, 8);
+    var seg = new THREE.Mesh(segGeo, i % 4 === 0 ? mGold : mBody);
+    seg.position.set(sx, sy, sz);
+    seg.castShadow = true;
+    rayquazaGroup.add(seg);
+    raySegments.push({ mesh: seg, baseX: sx, baseY: sy, baseZ: sz, phase: t * Math.PI * 4 });
+
+    // Gold ring every 4 segments
+    if (i % 4 === 0 && i > 0 && i < SEG - 1) {
+      var ringGeo = new THREE.TorusGeometry(bodyRadius[i] + 0.06, 0.04, 6, 12);
+      var ring = new THREE.Mesh(ringGeo, mGoldBright);
+      ring.position.set(sx, sy, sz);
+      ring.rotation.x = Math.PI / 2;
+      rayquazaGroup.add(ring);
+    }
+
+    // Side fins every 5 segments
+    if (i % 5 === 2 && i < SEG - 2) {
+      for (var side = -1; side <= 1; side += 2) {
+        var finGeo = new THREE.ConeGeometry(0.15, 0.5, 4);
+        var fin = new THREE.Mesh(finGeo, mGold);
+        fin.position.set(sx + side * 0.4, sy, sz);
+        fin.rotation.z = side * 0.8;
+        fin.castShadow = true;
+        rayquazaGroup.add(fin);
+      }
+    }
+  }
+
+  // === HEAD (last segment area) ===
+  var headZ = ((SEG - 1) / (SEG - 1) - 0.5) * 6;
+  var headX = Math.sin(((SEG - 1) / (SEG - 1)) * Math.PI * 2.5) * 1.2;
+  var headY = 3.5 + Math.sin(Math.PI) * 0.8;
+
+  // Snout (elongated)
+  var snout = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.2, 0.6), mBody);
+  snout.position.set(headX, headY - 0.05, headZ + 0.5);
+  snout.castShadow = true;
+  rayquazaGroup.add(snout);
+
+  // Upper jaw ridge
+  var jaw = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.5), mDark);
+  jaw.position.set(headX, headY + 0.1, headZ + 0.45);
+  rayquazaGroup.add(jaw);
+
+  // Eyes
+  for (var side = -1; side <= 1; side += 2) {
+    var eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), mEye);
+    eye.position.set(headX + side * 0.18, headY + 0.08, headZ + 0.25);
+    rayquazaGroup.add(eye);
+    // Eye glow
+    var eyeGlow = new THREE.PointLight(RED, 0.5, 2, 2);
+    eyeGlow.position.copy(eye.position);
+    rayquazaGroup.add(eyeGlow);
+  }
+
+  // Head crest / horn (3 prongs — iconic Rayquaza)
+  var hornMid = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.8, 5), mGoldBright);
+  hornMid.position.set(headX, headY + 0.55, headZ + 0.1);
+  hornMid.rotation.x = -0.3;
+  hornMid.castShadow = true;
+  rayquazaGroup.add(hornMid);
+
+  var hornL = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.6, 5), mGold);
+  hornL.position.set(headX - 0.15, headY + 0.45, headZ + 0.05);
+  hornL.rotation.x = -0.2; hornL.rotation.z = 0.3;
+  rayquazaGroup.add(hornL);
+
+  var hornR = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.6, 5), mGold);
+  hornR.position.set(headX + 0.15, headY + 0.45, headZ + 0.05);
+  hornR.rotation.x = -0.2; hornR.rotation.z = -0.3;
+  rayquazaGroup.add(hornR);
+
+  // === TAIL (first segment area) ===
+  var tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.6, 6), mGold);
+  var tailZ = -0.5 * 6;
+  var tailX = Math.sin(0) * 1.2;
+  tailTip.position.set(tailX, 3.5, tailZ - 0.3);
+  tailTip.rotation.x = Math.PI / 2;
+  tailTip.castShadow = true;
+  rayquazaGroup.add(tailTip);
+
+  // Tail fins
+  for (var side = -1; side <= 1; side += 2) {
+    var tf = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.35, 0.4), mGold);
+    tf.position.set(tailX + side * 0.15, 3.5, tailZ - 0.15);
+    tf.rotation.z = side * 0.4;
+    rayquazaGroup.add(tf);
+  }
+
+  // Belly line (gold stripe along underside)
+  for (var i = 2; i < SEG - 2; i += 2) {
+    var t = i / (SEG - 1);
+    var bx = Math.sin(t * Math.PI * 2.5) * 1.2;
+    var bz = (t - 0.5) * 6;
+    var by = Math.sin(t * Math.PI) * 0.8 + 3.5 - bodyRadius[i] * 0.7;
+    var belly = new THREE.Mesh(new THREE.SphereGeometry(bodyRadius[i] * 0.5, 6, 4), mGold);
+    belly.position.set(bx, by, bz);
+    belly.scale.set(0.6, 0.4, 1);
+    rayquazaGroup.add(belly);
+  }
+
+  // Position at Bourg-Aurore center (80, 60)
+  rayquazaGroup.position.set(80, 0, 60);
+  scene.add(rayquazaGroup);
+
+  // Ambient glow light for drama
+  var glow = new THREE.PointLight(GOLD, 1.5, 12, 1.5);
+  glow.position.set(0, 4, 0);
+  rayquazaGroup.add(glow);
+})();
+
 // ===================== CLICK-TO-MOVE =====================
 var raycaster = new THREE.Raycaster();
 var mouseVec = new THREE.Vector2();
@@ -661,6 +808,20 @@ function animate() {
 
   state.playerX = playerX;
   state.playerZ = playerZ;
+
+  // --- Rayquaza serpentine animation ---
+  if (rayquazaGroup.visible) {
+    // Slow rotation
+    rayquazaGroup.rotation.y += dt * 0.15;
+    // Floating bob
+    rayquazaGroup.position.y = Math.sin(time * 0.5) * 0.3;
+    // Undulate body segments
+    for (var ri = 0; ri < raySegments.length; ri++) {
+      var rs = raySegments[ri];
+      rs.mesh.position.y = rs.baseY + Math.sin(time * 1.8 + rs.phase) * 0.15;
+      rs.mesh.position.x = rs.baseX + Math.sin(time * 1.2 + rs.phase * 0.7) * 0.08;
+    }
+  }
 
   // Interior: flat floor Y=0; Exterior: height map
   var targetY = interiorState.active ? 0 : getHeightSmooth(playerX, playerZ);
